@@ -14,6 +14,7 @@ import re
 from .contracts import Verdict
 from .critics import (
     brand_critic, claim_support_critic, consistency_critic, grounding_critic,
+    object_count_critic, scene_plausibility_critic,
 )
 
 # Rough per-call cost in USD, used only to report credits saved by short-circuiting.
@@ -24,6 +25,8 @@ COST_EST = {
     "claim_support": 0.010,
     "brand_tone": 0.008,
     "consistency": 0.012,
+    "object_count": 0.003,
+    "scene_plausibility": 0.012,
 }
 
 
@@ -72,6 +75,15 @@ async def run_check(check, provider, artifacts: dict, run_input: dict) -> Verdic
         v = await asyncio.to_thread(
             consistency_critic, provider, artifacts.get("copy", ""),
             artifacts.get("image_b64", ""))
+    elif t == "object_count":
+        obj = p.get("object") or run_input.get("target_object", "")
+        v = await asyncio.to_thread(
+            object_count_critic, provider, artifacts.get("image_b64", ""), obj,
+            int(p.get("min", 1)), int(p.get("max", 999)))
+    elif t == "scene_plausibility":
+        v = await asyncio.to_thread(
+            scene_plausibility_critic, provider, artifacts.get("image_b64", ""),
+            p.get("rubric", ""))
     else:
         v = Verdict(check.name, False, 0.0, f"Unknown check type '{t}'.", "")
 

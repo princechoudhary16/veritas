@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 
 @dataclass
@@ -18,6 +18,7 @@ class Verdict:
     score: float        # 0.0 - 1.0 confidence / quality score
     reason: str         # human-readable justification (cite the fault)
     fix_hint: str = ""  # actionable instruction the Fixer can consume
+    data: dict = field(default_factory=dict)  # extra evidence, e.g. SAM boxes for overlays
 
     def to_dict(self) -> dict:
         return asdict(self)

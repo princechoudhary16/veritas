@@ -15,12 +15,14 @@ import yaml
 
 # Check types the engine knows how to run (see veritas/checks.py).
 KNOWN_TYPES = {
-    "banned_terms",    # deterministic, no API call
-    "max_sentences",   # deterministic, no API call
-    "grounding",       # SAM 3.1 spatial grounding
-    "claim_support",   # Muse Spark fact-check
-    "brand_tone",      # Muse Spark brand compliance
-    "consistency",     # Muse Spark vision cross-modal check
+    "banned_terms",       # deterministic, no API call
+    "max_sentences",      # deterministic, no API call
+    "grounding",          # SAM 3.1 spatial grounding
+    "claim_support",      # Muse Spark fact-check
+    "brand_tone",         # Muse Spark brand compliance
+    "consistency",        # Muse Spark vision cross-modal check
+    "object_count",       # SAM 3.1 instance counting (density / occlusion)
+    "scene_plausibility", # Muse Spark vision physical-plausibility check
 }
 
 
