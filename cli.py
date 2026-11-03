@@ -10,7 +10,7 @@ import json
 import os
 import time
 
-from veritas.config import load_api_key
+from veritas.config import load_api_key, make_partner_provider
 from veritas.engine import run_engine
 from veritas.meta_client import MetaClient
 from veritas.policy import load_policy
@@ -22,6 +22,8 @@ def main() -> None:
     ap.add_argument("--brief", help="override the policy's default brief")
     ap.add_argument("--scene", help="override the policy's default image scene prompt")
     ap.add_argument("--receipt", default="veritas.lock.json", help="where to write the receipt")
+    ap.add_argument("--partner", action="store_true",
+                    help="route text critics to the Baseten inference partner (hybrid)")
     args = ap.parse_args()
 
     policy = load_policy(args.policy)
@@ -32,6 +34,11 @@ def main() -> None:
         "scene_prompt": args.scene or policy.scene_prompt,
     }
     provider = MetaClient(load_api_key())
+    critic_provider = make_partner_provider() if args.partner else None
+    if args.partner and critic_provider is None:
+        raise SystemExit("--partner set but BASETEN_API_KEY is not configured in the environment")
+    if critic_provider is not None:
+        print(f"Hybrid routing: text critics -> {critic_provider.label}/{critic_provider.model}")
 
     def on_event(kind, n, payload):
         if kind == "generated":
@@ -49,7 +56,8 @@ def main() -> None:
                   f"| stopped={payload['stopped']} | spend=${payload['spend']:.4f}")
 
     print(f"Policy: {policy.name}  ({policy.theme})")
-    result = asyncio.run(run_engine(policy, run_input, provider, on_event=on_event))
+    result = asyncio.run(run_engine(policy, run_input, provider,
+                                    critic_provider=critic_provider, on_event=on_event))
 
     with open(args.receipt, "w") as f:
         json.dump(result.receipt, f, indent=2)
@@ -63,8 +71,11 @@ def main() -> None:
                    "stopped_reason": result.stopped_reason, "spend_usd": result.spend_usd,
                    "iterations": result.iterations, "receipt": result.receipt}, f)
     econ = result.receipt["economics"]
+    print(f"Meta credits spent:                ${econ['credits_spent_usd']:.4f}")
     print(f"Credits saved by short-circuiting: ${econ['credits_saved_by_short_circuit_usd']:.4f}")
     print(f"Credits saved by cache:            ${econ['credits_saved_by_cache_usd']:.4f}")
+    if econ.get("critics_routed_to"):
+        print(f"Partner spend ({econ['critics_routed_to']}): ${econ['partner_spend_usd']:.4f}")
 
 
 if __name__ == "__main__":

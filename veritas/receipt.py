@@ -26,7 +26,8 @@ def _sha256_file(path: str) -> str | None:
         return hashlib.sha256(f.read()).hexdigest()
 
 
-def build_receipt(policy, run_input, iterations, artifacts, provider, passed, stopped) -> dict:
+def build_receipt(policy, run_input, iterations, artifacts, provider, passed, stopped,
+                  critic_provider=None) -> dict:
     saved = 0.0
     for it in iterations:
         for name in it.skipped:
@@ -38,6 +39,15 @@ def build_receipt(policy, run_input, iterations, artifacts, provider, passed, st
         for name in getattr(it, "cached", []):
             ctype = next((c.type for c in policy.checks if c.name == name), None)
             cache_saved += COST_EST.get(ctype, 0.0)
+
+    spend_by_model = {k: round(v, 6) for k, v in provider.usage.by_model.items()}
+    partner_spend = 0.0
+    partner_label = None
+    if critic_provider is not None:
+        partner_spend = critic_provider.usage.spend_usd
+        partner_label = f"{critic_provider.label}/{critic_provider.model}"
+        for k, v in critic_provider.usage.by_model.items():
+            spend_by_model[k] = round(v, 6)
 
     final_scores = {}
     if iterations:
@@ -66,8 +76,10 @@ def build_receipt(policy, run_input, iterations, artifacts, provider, passed, st
         },
         "economics": {
             "credits_spent_usd": round(provider.usage.spend_usd, 6),
+            "partner_spend_usd": round(partner_spend, 6),
+            "critics_routed_to": partner_label,
             "credits_saved_by_short_circuit_usd": round(saved, 6),
             "credits_saved_by_cache_usd": round(cache_saved, 6),
-            "spend_by_model": {k: round(v, 6) for k, v in provider.usage.by_model.items()},
+            "spend_by_model": spend_by_model,
         },
     }

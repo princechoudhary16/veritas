@@ -75,7 +75,8 @@ def _failures_for_target(verdicts, checks, target):
     return [v for v in verdicts if not v.passed and name_to_target.get(v.check) == target]
 
 
-async def run_engine(policy, run_input: dict, provider, *, out_dir="out", on_event=None) -> EngineResult:
+async def run_engine(policy, run_input: dict, provider, *, critic_provider=None,
+                     out_dir="out", on_event=None) -> EngineResult:
     checks = policy.checks
     tiers = sorted({c.tier for c in checks})
     os.makedirs(out_dir, exist_ok=True)
@@ -119,7 +120,7 @@ async def run_engine(policy, run_input: dict, provider, *, out_dir="out", on_eve
             tier_checks = [c for c in checks if c.tier == tier]
             to_run = [c for c in tier_checks if _cache_key(c, hashes) not in cache]
             fresh = await asyncio.gather(
-                *[run_check(c, provider, artifacts, run_input) for c in to_run])
+                *[run_check(c, provider, artifacts, run_input, critic_provider) for c in to_run])
             for c, v in zip(to_run, fresh):
                 cache[_cache_key(c, hashes)] = v
             results = [cache[_cache_key(c, hashes)] for c in tier_checks]
@@ -152,7 +153,8 @@ async def run_engine(policy, run_input: dict, provider, *, out_dir="out", on_eve
 
     final = {"copy": artifacts.get("copy", ""), "image": artifacts.get("image_path", "")}
     passed = bool(iterations and iterations[-1].passed)
-    receipt = build_receipt(policy, run_input, iterations, artifacts, provider, passed, stopped)
+    receipt = build_receipt(policy, run_input, iterations, artifacts, provider, passed, stopped,
+                            critic_provider)
     if on_event:
         on_event("done", 0, {"passed": passed, "stopped": stopped,
                              "iterations": len(iterations),

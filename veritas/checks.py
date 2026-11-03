@@ -105,8 +105,13 @@ def _required_terms(copy: str, all_terms: list, any_terms: list) -> Verdict:
     return Verdict("required_terms", True, 1.0, "All required text present.", "")
 
 
-async def run_check(check, provider, artifacts: dict, run_input: dict) -> Verdict:
-    """Run one check and return a Verdict labelled with the check's declared name."""
+async def run_check(check, provider, artifacts: dict, run_input: dict, critic_provider=None) -> Verdict:
+    """Run one check and return a Verdict labelled with the check's declared name.
+
+    Text-only semantic critics (claim_support, brand_tone) run on
+    ``critic_provider`` when one is supplied (hybrid routing to an inference
+    partner); everything else stays on ``provider`` (Meta).
+    """
     t = check.type
     p = check.params or {}
 
@@ -121,11 +126,11 @@ async def run_check(check, provider, artifacts: dict, run_input: dict) -> Verdic
             grounding_critic, provider, artifacts.get("image_b64", ""), obj, maf)
     elif t == "claim_support":
         v = await asyncio.to_thread(
-            claim_support_critic, provider, artifacts.get("copy", ""),
+            claim_support_critic, critic_provider or provider, artifacts.get("copy", ""),
             run_input.get("source_truth", ""))
     elif t == "brand_tone":
         v = await asyncio.to_thread(
-            brand_critic, provider, artifacts.get("copy", ""), p.get("rules", ""))
+            brand_critic, critic_provider or provider, artifacts.get("copy", ""), p.get("rules", ""))
     elif t == "consistency":
         v = await asyncio.to_thread(
             consistency_critic, provider, artifacts.get("copy", ""),
