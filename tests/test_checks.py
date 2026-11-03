@@ -1,7 +1,7 @@
 """Unit tests for the deterministic Tier-1 checks (no network)."""
 
 from veritas.checks import (
-    _banned_terms, _max_sentences, _reading_level, _required_terms,
+    _banned_terms, _max_sentences, _reading_level, _required_terms, _z3_constraint,
 )
 
 
@@ -59,3 +59,25 @@ def test_required_terms_present():
 def test_required_terms_missing_all():
     v = _required_terms("No disclaimer here", all_terms=["not a substitute"], any_terms=[])
     assert not v.passed
+
+
+_EXTRACT = {"capacity_ml": r"(\d+)\s*ml", "price_usd": r"\$(\d+)"}
+
+
+def test_z3_formally_passes():
+    v = _z3_constraint("A 750 ml steel bottle for $29.", _EXTRACT,
+                       ["capacity_ml == 750", "price_usd == 29"])
+    assert v.passed
+
+
+def test_z3_proves_violation():
+    v = _z3_constraint("A 500 ml steel bottle.", {"capacity_ml": r"(\d+)\s*ml"},
+                       ["capacity_ml == 750"])
+    assert not v.passed
+    assert "500" in v.reason or "disproved" in v.reason.lower()
+
+
+def test_z3_no_numbers_passes():
+    v = _z3_constraint("A lovely durable bottle.", {"capacity_ml": r"(\d+)\s*ml"},
+                       ["capacity_ml == 750"])
+    assert v.passed  # nothing numeric to verify is not a violation
