@@ -116,11 +116,30 @@ assets, the policy and checks that certified them, per-critic final scores, and
 the economics (credits spent vs. saved by short-circuiting). See
 [`docs/sample.veritas.lock.json`](docs/sample.veritas.lock.json).
 
+## Inference partners (hybrid routing)
+
+Veritas keeps the Meta Model API as its primary engine (Muse Spark, Muse Image,
+SAM 3.1) and can **burst the text-only critics to an inference partner** running
+open-weights models — Baseten, Fireworks, or Modal (any OpenAI-compatible
+endpoint; only the base URL and model slug change). Generation, SAM grounding,
+and the vision critics stay on Meta.
+
+```bash
+python cli.py policies/commercial_brand_guard.yaml --partner
+```
+
+Because the budget guard tracks Meta spend, offloading critics to the partner
+*reduces* Meta credit usage. A measured run routing `claim_support` + `brand_tone`
+to Baseten `openai/gpt-oss-120b` cut `muse-spark` spend from ~$0.043 to ~$0.018,
+and the receipt records the split (`partner_spend_usd`, `critics_routed_to`, and
+a per-model breakdown).
+
 ## Repo layout
 
 | Path | Role |
 |------|------|
 | `veritas/policy.py` | policy pack types + YAML loader + validation |
+| `veritas/providers.py` | OpenAI-compatible partner adapter (Baseten/Fireworks/Modal) |
 | `veritas/engine.py` | async tiered DAG, short-circuit, fix routing, budget |
 | `veritas/checks.py` | check registry (deterministic + LLM/SAM), tiered |
 | `veritas/critics.py` | the independent critics |
