@@ -132,7 +132,10 @@ Because the budget guard tracks Meta spend, offloading critics to the partner
 *reduces* Meta credit usage. A measured run routing `claim_support` + `brand_tone`
 to Baseten `openai/gpt-oss-120b` cut `muse-spark` spend from ~$0.043 to ~$0.018,
 and the receipt records the split (`partner_spend_usd`, `critics_routed_to`, and
-a per-model breakdown).
+a per-model breakdown). The UI has a one-click **"burst critics to Baseten"**
+toggle, so the routing is visible live:
+
+![Hybrid routing: text critics on Baseten, generation and SAM 3.1 on Meta](docs/ui-partner.jpg)
 
 ## Repo layout
 
