@@ -374,7 +374,9 @@ function handle(ev){
   if(ev.kind==='generated'){
     const el=card(ev.n);
     const img=document.getElementById('shot-'+ev.n);
-    if(ev.payload.image_url)img.src=ev.payload.image_url;
+    if(ev.payload.image_url){ img.src=ev.payload.image_url; }
+    else { const w=el.querySelector('.shot-wrap'); if(w)w.style.display='none';
+           const b=el.querySelector('.body'); if(b)b.style.gridTemplateColumns='1fr'; }
     const copy=document.getElementById('copy-'+ev.n);
     if(ev.payload.copy){copy.style.display='';copy.textContent=ev.payload.copy;}
     const op=document.getElementById('op-'+ev.n);
