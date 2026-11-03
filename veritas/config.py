@@ -13,7 +13,6 @@ BASE_URL = os.environ.get("META_BASE_URL", "https://api.meta.ai/v1")
 TEXT_MODEL = os.environ.get("VERITAS_TEXT_MODEL", "muse-spark-1.3")
 IMAGE_MODEL = os.environ.get("VERITAS_IMAGE_MODEL", "muse-image-1.0")
 SEG_MODEL = os.environ.get("VERITAS_SEG_MODEL", "sam-3.1")
-VIDEO_MODEL = os.environ.get("VERITAS_VIDEO_MODEL", "muse-wonder-1.0")
 # muse-wonder-1.0 is Meta's agentic reasoning model (not video) — used as the
 # Tier-3 deep-reasoning escalation arbitrator when the normal loop keeps failing.
 WONDER_MODEL = os.environ.get("VERITAS_ARBITER_MODEL", "muse-wonder-1.0")
