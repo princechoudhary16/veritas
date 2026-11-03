@@ -14,7 +14,7 @@ import re
 from .contracts import Verdict
 from .critics import (
     brand_critic, claim_support_critic, consistency_critic, grounding_critic,
-    object_count_critic, scene_plausibility_critic,
+    object_count_critic, scene_plausibility_critic, text_legibility_critic,
 )
 
 # Rough per-call cost in USD, used only to report credits saved by short-circuiting.
@@ -27,6 +27,9 @@ COST_EST = {
     "consistency": 0.012,
     "object_count": 0.003,
     "scene_plausibility": 0.012,
+    "reading_level": 0.0,
+    "required_terms": 0.0,
+    "text_legibility": 0.012,
 }
 
 
@@ -48,6 +51,58 @@ def _max_sentences(copy: str, max_n: int) -> Verdict:
                        f"Body copy has {n} sentences; limit is {max_n}.",
                        f"Tighten the body to at most {max_n} sentences.")
     return Verdict("max_sentences", True, 1.0, f"{n} sentence(s), within limit {max_n}.", "")
+
+
+def _count_syllables(word: str) -> int:
+    word = re.sub(r"[^a-z]", "", word.lower())
+    if not word:
+        return 0
+    vowels = "aeiouy"
+    count, prev_vowel = 0, False
+    for ch in word:
+        is_vowel = ch in vowels
+        if is_vowel and not prev_vowel:
+            count += 1
+        prev_vowel = is_vowel
+    if word.endswith("e") and count > 1:
+        count -= 1
+    return max(1, count)
+
+
+def flesch_reading_ease(text: str) -> float:
+    """Flesch Reading Ease (higher = easier). ~60+ is plain language."""
+    words = re.findall(r"[A-Za-z]+", text)
+    sentences = [s for s in re.split(r"[.!?]+", text) if s.strip()]
+    if not words or not sentences:
+        return 0.0
+    nw, ns = len(words), len(sentences)
+    syllables = sum(_count_syllables(w) for w in words)
+    return 206.835 - 1.015 * (nw / ns) - 84.6 * (syllables / nw)
+
+
+def _reading_level(copy: str, min_score: float) -> Verdict:
+    fre = flesch_reading_ease(copy)
+    if fre < min_score:
+        return Verdict("reading_level", False, round(max(fre, 0.0) / max(min_score, 1), 2),
+                       f"Flesch Reading Ease {fre:.0f} is below the {min_score:.0f} plain-language bar.",
+                       "Use shorter words and shorter sentences to raise readability.")
+    return Verdict("reading_level", True, 1.0,
+                   f"Flesch Reading Ease {fre:.0f} meets the {min_score:.0f} plain-language bar.", "")
+
+
+def _required_terms(copy: str, all_terms: list, any_terms: list) -> Verdict:
+    low = copy.lower()
+    missing = [t for t in all_terms if t.lower() not in low]
+    has_any = (not any_terms) or any(t.lower() in low for t in any_terms)
+    if missing:
+        return Verdict("required_terms", False, 0.0,
+                       f"Missing required text: {', '.join(missing)}.",
+                       f"Add: {', '.join(missing)}.")
+    if not has_any:
+        return Verdict("required_terms", False, 0.0,
+                       f"Must include at least one of: {', '.join(any_terms)}.",
+                       f"Add one of: {', '.join(any_terms)}.")
+    return Verdict("required_terms", True, 1.0, "All required text present.", "")
 
 
 async def run_check(check, provider, artifacts: dict, run_input: dict) -> Verdict:
@@ -84,6 +139,13 @@ async def run_check(check, provider, artifacts: dict, run_input: dict) -> Verdic
         v = await asyncio.to_thread(
             scene_plausibility_critic, provider, artifacts.get("image_b64", ""),
             p.get("rubric", ""))
+    elif t == "reading_level":
+        v = _reading_level(artifacts.get("copy", ""), float(p.get("min", 60)))
+    elif t == "required_terms":
+        v = _required_terms(artifacts.get("copy", ""), p.get("all", []), p.get("any", []))
+    elif t == "text_legibility":
+        v = await asyncio.to_thread(
+            text_legibility_critic, provider, artifacts.get("image_b64", ""))
     else:
         v = Verdict(check.name, False, 0.0, f"Unknown check type '{t}'.", "")
 

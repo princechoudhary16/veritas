@@ -1,6 +1,8 @@
 """Unit tests for the deterministic Tier-1 checks (no network)."""
 
-from veritas.checks import _banned_terms, _max_sentences
+from veritas.checks import (
+    _banned_terms, _max_sentences, _reading_level, _required_terms,
+)
 
 
 def test_banned_terms_catches_hit():
@@ -30,3 +32,30 @@ def test_max_sentences_within_limit():
     copy = "Headline line\nOne sentence here. Two sentences here."
     v = _max_sentences(copy, 2)
     assert v.passed
+
+
+def test_reading_level_simple_passes():
+    v = _reading_level("The cat sat on the mat. The dog ran fast.", 60)
+    assert v.passed
+
+
+def test_reading_level_dense_fails():
+    hard = ("Notwithstanding the aforementioned complexities, the utilization of "
+            "multisyllabic terminology substantially diminishes comprehensibility.")
+    v = _reading_level(hard, 60)
+    assert not v.passed
+
+
+def test_required_terms_missing_any():
+    v = _required_terms("Buy now and feel great", all_terms=[], any_terms=["consult", "doctor"])
+    assert not v.passed
+
+
+def test_required_terms_present():
+    v = _required_terms("Please consult your doctor first.", all_terms=[], any_terms=["consult"])
+    assert v.passed
+
+
+def test_required_terms_missing_all():
+    v = _required_terms("No disclaimer here", all_terms=["not a substitute"], any_terms=[])
+    assert not v.passed

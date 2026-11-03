@@ -174,3 +174,31 @@ def scene_plausibility_critic(client, image_b64: str, rubric: str, effort: str =
         TEXT_MODEL, inp, instructions=SCENE_PLAUSIBILITY_INSTRUCTIONS, reasoning_effort=effort
     )
     return parse_verdict("scene_plausibility", text)
+
+
+TEXT_LEGIBILITY_INSTRUCTIONS = (
+    "You are a web-accessibility reviewer applying WCAG. Given an IMAGE, decide "
+    "whether any text rendered inside the image is clearly legible: strong "
+    "contrast with its background, not clipped, warped, or garbled. If the image "
+    "contains no text at all, that PASSES. Text that is low-contrast, distorted, "
+    "or unreadable FAILS.\n"
+    "Respond with ONLY a JSON object, no other text:\n"
+    '{"pass": true/false, "score": 0.0-1.0, '
+    '"reason": "cite the illegible text, or confirm legible / no text", '
+    '"fix_hint": "how to make the in-image text legible"}'
+)
+
+
+def text_legibility_critic(client, image_b64: str, effort: str = "low") -> Verdict:
+    data_uri = "data:image/webp;base64," + image_b64
+    inp = [{
+        "role": "user",
+        "content": [
+            {"type": "input_text", "text": "Assess the legibility of any text in this image."},
+            {"type": "input_image", "image_url": data_uri},
+        ],
+    }]
+    text, _ = client.respond_text(
+        TEXT_MODEL, inp, instructions=TEXT_LEGIBILITY_INSTRUCTIONS, reasoning_effort=effort
+    )
+    return parse_verdict("text_legibility", text)

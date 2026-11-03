@@ -23,6 +23,9 @@ KNOWN_TYPES = {
     "consistency",        # Muse Spark vision cross-modal check
     "object_count",       # SAM 3.1 instance counting (density / occlusion)
     "scene_plausibility", # Muse Spark vision physical-plausibility check
+    "reading_level",      # deterministic Flesch Reading Ease (plain language)
+    "required_terms",     # deterministic required text (e.g. disclaimers)
+    "text_legibility",    # Muse Spark vision WCAG text-legibility check
 }
 
 
