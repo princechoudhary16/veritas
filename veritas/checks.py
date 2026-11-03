@@ -30,6 +30,7 @@ COST_EST = {
     "reading_level": 0.0,
     "required_terms": 0.0,
     "text_legibility": 0.012,
+    "z3_constraint": 0.0,
 }
 
 
@@ -105,6 +106,66 @@ def _required_terms(copy: str, all_terms: list, any_terms: list) -> Verdict:
     return Verdict("required_terms", True, 1.0, "All required text present.", "")
 
 
+def _z3_constraint(copy: str, extract: dict, asserts: list) -> Verdict:
+    """Neuro-symbolic gate: extract numbers from the copy, then formally verify
+    policy constraints with the Z3 SMT solver.
+
+    `extract` maps a variable name to a regex with one integer capture group;
+    `asserts` is a list of comparison expressions over those variables that must
+    all hold. Only assertions whose variables were found in the copy are checked
+    (a missing number is not a numeric violation). The verdict is a formal proof,
+    not an LLM opinion.
+    """
+    from z3 import And, Int, Not, Solver, sat
+
+    env, extracted = {}, {}
+    for name, pattern in (extract or {}).items():
+        match = re.search(pattern, copy)
+        value = None
+        if match:
+            try:
+                value = int(match.group(1))
+            except (ValueError, IndexError):
+                value = None
+        env[name] = Int(name)
+        extracted[name] = value
+
+    usable = []
+    for a in (asserts or []):
+        names = [n for n in env if n in a]
+        if names and all(extracted.get(n) is not None for n in names):
+            try:
+                usable.append((a, eval(a, {"__builtins__": {}}, env)))  # Z3 BoolRef
+            except Exception:
+                continue
+
+    if not usable:
+        return Verdict("z3_constraint", True, 1.0,
+                       "No numeric claims present to formally verify.", "")
+
+    solver = Solver()
+    for name, value in extracted.items():
+        if value is not None:
+            solver.add(env[name] == value)
+    solver.add(Not(And(*[expr for _, expr in usable])))
+    if solver.check() == sat:  # a satisfying assignment violates the constraint
+        failed = [a for a, _ in usable if not _eval_python(a, extracted)]
+        return Verdict("z3_constraint", False, 0.0,
+                       f"Z3 disproved a stated claim: {', '.join(failed) or 'constraint unsatisfied'} "
+                       f"(extracted {extracted}).",
+                       "Correct the stated numbers to satisfy the policy's formal constraints.")
+    return Verdict("z3_constraint", True, 1.0,
+                   f"Z3 formally verified {len(usable)} numeric constraint(s): {extracted}.", "")
+
+
+def _eval_python(expr: str, values: dict) -> bool:
+    env = {k: v for k, v in values.items() if v is not None}
+    try:
+        return bool(eval(expr, {"__builtins__": {}}, env))
+    except Exception:
+        return True
+
+
 async def run_check(check, provider, artifacts: dict, run_input: dict, critic_provider=None) -> Verdict:
     """Run one check and return a Verdict labelled with the check's declared name.
 
@@ -151,6 +212,8 @@ async def run_check(check, provider, artifacts: dict, run_input: dict, critic_pr
     elif t == "text_legibility":
         v = await asyncio.to_thread(
             text_legibility_critic, provider, artifacts.get("image_b64", ""))
+    elif t == "z3_constraint":
+        v = _z3_constraint(artifacts.get("copy", ""), p.get("extract", {}), p.get("asserts", []))
     else:
         v = Verdict(check.name, False, 0.0, f"Unknown check type '{t}'.", "")
 

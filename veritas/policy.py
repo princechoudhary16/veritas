@@ -26,6 +26,7 @@ KNOWN_TYPES = {
     "reading_level",      # deterministic Flesch Reading Ease (plain language)
     "required_terms",     # deterministic required text (e.g. disclaimers)
     "text_legibility",    # Muse Spark vision WCAG text-legibility check
+    "z3_constraint",      # neuro-symbolic: formal Z3 SMT verification of numeric claims
 }
 
 
