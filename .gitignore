@@ -14,3 +14,5 @@ out/
 *.png
 *.webp
 *.mp4
+veritas.lock.json
+.pytest_cache/
