@@ -15,6 +15,13 @@ IMAGE_MODEL = os.environ.get("VERITAS_IMAGE_MODEL", "muse-image-1.0")
 SEG_MODEL = os.environ.get("VERITAS_SEG_MODEL", "sam-3.1")
 VIDEO_MODEL = os.environ.get("VERITAS_VIDEO_MODEL", "muse-wonder-1.0")
 
+# --- Inference partner (OpenAI-compatible) for hybrid critic routing ---
+PARTNER_BASE_URL = os.environ.get("BASETEN_BASE_URL", "https://inference.baseten.co/v1")
+PARTNER_MODEL = os.environ.get("BASETEN_MODEL", "openai/gpt-oss-120b")
+# Rough open-weights pricing (USD per 1M tokens), for receipt accounting only.
+PARTNER_PRICE_IN = float(os.environ.get("PARTNER_PRICE_IN", "0.15"))
+PARTNER_PRICE_OUT = float(os.environ.get("PARTNER_PRICE_OUT", "0.60"))
+
 # --- Pricing, USD, per 1M tokens unless noted (from the Meta Model API pricing page) ---
 PRICES = {
     "muse-spark-1.3": {"input": 1.25, "cached": 0.15, "output": 4.25},
@@ -40,3 +47,14 @@ def load_api_key() -> str:
             "  set -a; source .env; set +a\n"
         )
     return key
+
+
+def make_partner_provider():
+    """Return a Baseten OpenAI-compatible critic provider if configured, else None."""
+    key = os.environ.get("BASETEN_API_KEY")
+    if not key:
+        return None
+    from .providers import OpenAICompatProvider
+    return OpenAICompatProvider(
+        key, PARTNER_BASE_URL, PARTNER_MODEL, label="baseten",
+        price_in=PARTNER_PRICE_IN, price_out=PARTNER_PRICE_OUT)
