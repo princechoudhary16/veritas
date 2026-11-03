@@ -22,7 +22,7 @@ import time
 
 from flask import Flask, Response, request, send_from_directory
 
-from veritas.config import load_api_key
+from veritas.config import PARTNER_MODEL, load_api_key, make_partner_provider
 from veritas.engine import run_engine
 from veritas.meta_client import MetaClient
 from veritas.policy import load_policy
@@ -63,6 +63,12 @@ def policies():
     return Response(json.dumps(items), mimetype="application/json")
 
 
+@app.route("/capabilities")
+def capabilities():
+    return Response(json.dumps({"partner": bool(os.environ.get("BASETEN_API_KEY")),
+                                "partner_model": PARTNER_MODEL}), mimetype="application/json")
+
+
 @app.route("/")
 def index():
     return Response(INDEX_HTML, mimetype="text/html")
@@ -80,14 +86,17 @@ def _sse(q):
 def stream():
     mode = request.args.get("mode", "live")
     policy_name = request.args.get("policy", "")
+    partner = request.args.get("partner", "") in ("1", "true", "on", "yes")
     q = queue.Queue()
-    target = _replay if mode == "replay" else _live
-    threading.Thread(target=target, args=(q, policy_name), daemon=True).start()
+    if mode == "replay":
+        threading.Thread(target=_replay, args=(q, policy_name), daemon=True).start()
+    else:
+        threading.Thread(target=_live, args=(q, policy_name, partner), daemon=True).start()
     return Response(_sse(q), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-def _live(q, policy_name):
+def _live(q, policy_name, partner=False):
     try:
         path = _policy_path(policy_name)
         if not path:
@@ -95,10 +104,16 @@ def _live(q, policy_name):
             return
         policy = load_policy(path)
         provider = MetaClient(load_api_key())
+        critic_provider = make_partner_provider() if partner else None
+        if partner and critic_provider is None:
+            q.put({"kind": "error",
+                   "payload": {"message": "Partner routing requested but BASETEN_API_KEY is not configured."}})
+            return
+        routed = f"{critic_provider.label}/{critic_provider.model}" if critic_provider else None
         run_input = {"brief": policy.brief, "source_truth": policy.source_truth,
                      "target_object": policy.target_object, "scene_prompt": policy.scene_prompt}
         q.put({"kind": "start", "spend": 0.0,
-               "payload": {"policy": policy.name, "theme": policy.theme}})
+               "payload": {"policy": policy.name, "theme": policy.theme, "partner": routed}})
 
         def on_event(kind, n, payload):
             ev = {"kind": kind, "n": n, "spend": round(provider.usage.spend_usd, 4)}
@@ -110,7 +125,8 @@ def _live(q, policy_name):
                 ev["payload"] = payload
             q.put(ev)
 
-        result = asyncio.run(run_engine(policy, run_input, provider, on_event=on_event))
+        result = asyncio.run(run_engine(policy, run_input, provider,
+                                        critic_provider=critic_provider, on_event=on_event))
 
         os.makedirs(os.path.join(HERE, "runs"), exist_ok=True)
         with open(os.path.join(HERE, "runs", f"engine_{policy.name}_{int(time.time())}.json"), "w") as f:
@@ -174,6 +190,7 @@ INDEX_HTML = r"""<!doctype html>
   .btn-run{background:var(--accent);color:#06221d}
   .btn-replay,.btn-dl{background:var(--card2);color:var(--text);border:1px solid var(--line)}
   button:disabled{opacity:.5;cursor:default}
+  .switch{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
   .pill{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .chip{background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;color:var(--muted)}
   .chip b{color:var(--text)}
@@ -216,7 +233,11 @@ INDEX_HTML = r"""<!doctype html>
     <div class="row">
       <button class="btn-run" id="runBtn" onclick="start('live')">Run verification</button>
       <button class="btn-replay" id="replayBtn" onclick="start('replay')">Replay last run</button>
+      <label class="switch" id="partnerLabel">
+        <input type="checkbox" id="partner"> burst critics to Baseten
+      </label>
       <div class="pill">
+        <span class="chip" id="partner-chip" style="display:none"></span>
         <span class="chip">spend <b id="spend">$0.0000</b></span>
         <span class="chip" id="status">idle</span>
       </div>
@@ -242,6 +263,14 @@ async function loadPolicies(){
     showDesc();
   }catch(e){ document.getElementById('desc').textContent='Could not load policies.'; }
 }
+async function loadCapabilities(){
+  try{
+    const c=await (await fetch('/capabilities')).json();
+    const cb=document.getElementById('partner'), lab=document.getElementById('partnerLabel');
+    if(!c.partner){ cb.checked=false; cb.disabled=true; lab.style.opacity=.5; lab.title='Set BASETEN_API_KEY to enable'; }
+    else { lab.title='Run the text critics on '+(c.partner_model||'the partner'); }
+  }catch(e){}
+}
 function showDesc(){
   const name=document.getElementById('policy').value;
   const p=POLICIES.find(x=>x.name===name);
@@ -258,7 +287,8 @@ function start(mode){
   RECEIPT=null; setSpend(0); busy(true);
   setStatus(mode==='replay'?'replaying…':'running live…');
   const policy=encodeURIComponent(document.getElementById('policy').value);
-  es=new EventSource('/stream?mode='+mode+'&policy='+policy);
+  const partner=(mode==='live' && document.getElementById('partner').checked) ? '&partner=1' : '';
+  es=new EventSource('/stream?mode='+mode+'&policy='+policy+partner);
   es.onmessage=e=>handle(JSON.parse(e.data));
   es.onerror=()=>{if(es){es.close();es=null;}busy(false);};
 }
@@ -317,6 +347,12 @@ function downloadReceipt(){
 
 function handle(ev){
   setSpend(ev.spend);
+  if(ev.kind==='start'){
+    const chip=document.getElementById('partner-chip');
+    if(ev.payload && ev.payload.partner){ chip.style.display=''; chip.innerHTML='critics → <b>'+ev.payload.partner+'</b>'; }
+    else { chip.style.display='none'; }
+    return;
+  }
   if(ev.kind==='generated'){
     const el=card(ev.n);
     const img=document.getElementById('shot-'+ev.n);
@@ -343,10 +379,14 @@ function handle(ev){
     RECEIPT=ev.payload.receipt||null;
     const b=document.getElementById('banner');
     b.className='banner '+(ev.payload.passed?'pass':'fail');
-    const saved=RECEIPT?Number(RECEIPT.economics.credits_saved_by_short_circuit_usd).toFixed(4):'0';
+    const econ=RECEIPT?RECEIPT.economics:null;
+    const sc=econ?Number(econ.credits_saved_by_short_circuit_usd).toFixed(4):'0';
+    const ca=econ?Number(econ.credits_saved_by_cache_usd).toFixed(4):'0';
+    const routed=econ&&econ.critics_routed_to;
+    const ptxt=routed?' · critics on '+routed+' ($'+Number(econ.partner_spend_usd).toFixed(4)+')':'';
     b.innerHTML='<span>'+(ev.payload.passed?'✓ Verified in ':'✗ Stopped after ')+ev.payload.iterations+
-      ' iteration(s) · spend $'+Number(ev.payload.spend).toFixed(4)+' · saved $'+saved+
-      ' by short-circuit</span>'+
+      ' iteration(s) · Meta spend $'+Number(ev.payload.spend).toFixed(4)+
+      ' · saved $'+sc+' short-circuit + $'+ca+' cache'+ptxt+'</span>'+
       (RECEIPT?'<button class="btn-dl" onclick="downloadReceipt()">Download veritas.lock.json</button>':'');
     setStatus('done');busy(false);if(es){es.close();es=null;}
   }else if(ev.kind==='error'){
@@ -357,6 +397,7 @@ function handle(ev){
 }
 
 loadPolicies();
+loadCapabilities();
 </script>
 </body>
 </html>
