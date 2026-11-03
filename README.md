@@ -54,7 +54,10 @@ policy pack (YAML)  +  source of truth
 - **Separation of powers**: generators and critics are independent model calls;
   deterministic checks gate the LLM ones (mitigates LLM-as-a-judge bias).
 - **Fix routing**: a failing check is routed to the copy *or* the image, so the
-  Fixer regenerates only what broke.
+  Fixer regenerates only what broke. With `--surgical` (or `image_repair: edit`),
+  an image fix **edits the flagged image in place** via Muse Image
+  `/v1/images/edits` — preserving the already-verified scene instead of
+  regenerating it.
 - **Fail closed**: hard iteration + spend budgets; it refuses rather than ships.
 
 ### Check types
@@ -194,9 +197,9 @@ Veritas is a verification protocol; these are the high-value wedges it extends t
 - **Autonomous UI visual-regression CI/CD** (*Push the Frontier*) — segment and
   verify rendered UI components on every pull request.
 
-Also planned: surgical in-place repair via Muse Image `/v1/images/edits` (fix
-only the flagged region instead of regenerating), and audio disclaimer
-verification via Muse Voice Transcribe.
+Also planned: SAM 3.1 video temporal-stability checks for Muse Wonder clips,
+C2PA receipt embedding, and audio disclaimer verification via Muse Voice
+Transcribe.
 
 ## License
 
