@@ -167,3 +167,32 @@ def test_surgical_repair_edits_instead_of_regenerating(tmp_path, monkeypatch):
     assert result.passed is True
     assert calls["gen"] == 1   # first image generated from scratch
     assert calls["edit"] == 1  # the fix was a surgical edit, not a regeneration
+
+
+def test_arbiter_escalates_after_threshold(tmp_path, monkeypatch):
+    policy = Policy(
+        name="arb_policy",
+        checks=[Check(name="grounding", type="grounding", tier=1, target="image")],
+        max_iters=5, budget_usd=5.0, produces=["image"],
+    )
+    state = {"g": 0}
+
+    async def fake_run_check(check, provider, artifacts, run_input, critic_provider=None):
+        state["g"] += 1
+        ok = state["g"] >= 3
+        return Verdict("grounding", ok, 1.0 if ok else 0.0, "img", "" if ok else "add product")
+
+    calls = {"arb": 0}
+    monkeypatch.setattr(engine_mod, "run_check", fake_run_check)
+    monkeypatch.setattr(engine_mod, "arbitrate",
+                        lambda client, verdicts, run_input, target, model=None:
+                        (calls.__setitem__("arb", calls["arb"] + 1) or f"fix {target}"))
+    monkeypatch.setattr(engine_mod, "generate_scene_image", _unique_image_gen())
+
+    result = asyncio.run(run_engine(
+        policy, {"brief": "b", "source_truth": "s", "target_object": "o", "scene_prompt": "sc"},
+        _FakeProvider(), arbiter=True, escalate_after=2, out_dir=str(tmp_path)))
+
+    assert result.passed is True
+    # iter 1 fails (n<2, plain feedback); iter 2 fails (n>=2 -> arbiter); iter 3 passes.
+    assert calls["arb"] == 1
