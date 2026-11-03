@@ -120,6 +120,24 @@ assets, the policy and checks that certified them, per-critic final scores, and
 the economics (credits spent vs. saved by short-circuiting). See
 [`docs/sample.veritas.lock.json`](docs/sample.veritas.lock.json).
 
+## Content Credentials (C2PA)
+
+Sidecar receipts get stripped when media is uploaded. With `--c2pa`, Veritas
+binds the receipt **into the image itself** as a signed
+[C2PA](https://c2pa.org) Content Credential — the industry standard backed by
+Meta, Adobe, Microsoft and the BBC. The manifest embeds a `c2pa.created` action
+(honestly labelling the image as AI-generated) and an `org.veritas.verification`
+assertion carrying the policy, per-critic scores, and SHA-256 asset hashes:
+
+```bash
+python cli.py policies/commercial_brand_guard.yaml --c2pa
+# -> out/commercial_brand_guard_verified.webp  (inspect at contentcredentials.org/verify)
+```
+
+The dev build self-signs with an ephemeral ES256 certificate chain, so the
+credential validates internally; swap in a production cert to verify against the
+C2PA trust list.
+
 ## Inference partners (hybrid routing)
 
 Veritas keeps the Meta Model API as its primary engine (Muse Spark, Muse Image,
@@ -168,6 +186,7 @@ python -m veritas.dpo              # writes veritas_dpo.jsonl from runs/
 | `veritas/policy.py` | policy pack types + YAML loader + validation |
 | `veritas/providers.py` | OpenAI-compatible partner adapter (Baseten/Fireworks/Modal) |
 | `veritas/dpo.py` | DPO preference-pair export from the audit ledger |
+| `veritas/c2pa_export.py` | bind the receipt into media as a C2PA Content Credential |
 | `veritas/engine.py` | async tiered DAG, short-circuit, fix routing, budget |
 | `veritas/checks.py` | check registry (deterministic + LLM/SAM), tiered |
 | `veritas/critics.py` | the independent critics |
@@ -198,8 +217,7 @@ Veritas is a verification protocol; these are the high-value wedges it extends t
   verify rendered UI components on every pull request.
 
 Also planned: SAM 3.1 video temporal-stability checks for Muse Wonder clips,
-C2PA receipt embedding, and audio disclaimer verification via Muse Voice
-Transcribe.
+and audio disclaimer verification via Muse Voice Transcribe.
 
 ## License
 
