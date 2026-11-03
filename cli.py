@@ -28,6 +28,8 @@ def main() -> None:
                     help="repair images by editing the flagged image in place (not full regen)")
     ap.add_argument("--c2pa", action="store_true",
                     help="embed the receipt into the final image as a C2PA Content Credential")
+    ap.add_argument("--arbiter", action="store_true",
+                    help="escalate repeated failures to the Muse Wonder deep-reasoning arbitrator")
     args = ap.parse_args()
 
     policy = load_policy(args.policy)
@@ -57,6 +59,8 @@ def main() -> None:
                 mark = "PASS" if v["passed"] else "FAIL"
                 print(f"   tier {payload['tier']} [{mark}] {v['check']} "
                       f"({v['score']:.2f}) -- {v['reason']}")
+        elif kind == "escalated":
+            print(f"   escalated to {payload['to']} (Tier-3 deep-reasoning arbitrator)")
         elif kind == "verified":
             if payload["skipped"]:
                 print(f"   short-circuit -> skipped tier-2 checks: {payload['skipped']}")
@@ -67,7 +71,7 @@ def main() -> None:
     print(f"Policy: {policy.name}  ({policy.theme})")
     result = asyncio.run(run_engine(policy, run_input, provider,
                                     critic_provider=critic_provider, surgical_repair=surgical,
-                                    on_event=on_event))
+                                    arbiter=args.arbiter, on_event=on_event))
 
     with open(args.receipt, "w") as f:
         json.dump(result.receipt, f, indent=2)

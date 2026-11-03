@@ -20,7 +20,8 @@ import os
 from dataclasses import asdict, dataclass, field
 
 from .checks import run_check
-from .fixer import build_feedback
+from .config import WONDER_MODEL
+from .fixer import arbitrate, build_feedback
 from .generators import edit_scene_image, generate_copy, generate_scene_image
 from .receipt import build_receipt
 
@@ -76,7 +77,8 @@ def _failures_for_target(verdicts, checks, target):
 
 
 async def run_engine(policy, run_input: dict, provider, *, critic_provider=None,
-                     surgical_repair=False, out_dir="out", on_event=None) -> EngineResult:
+                     surgical_repair=False, arbiter=False, escalate_after=2,
+                     out_dir="out", on_event=None) -> EngineResult:
     checks = policy.checks
     tiers = sorted({c.tier for c in checks})
     os.makedirs(out_dir, exist_ok=True)
@@ -154,10 +156,22 @@ async def run_engine(policy, run_input: dict, provider, *, critic_provider=None,
             stopped = "passed"
             break
 
-        feedback = {
-            "copy": build_feedback(_failures_for_target(verdicts, checks, "copy")) or None,
-            "image": build_feedback(_failures_for_target(verdicts, checks, "image")) or None,
-        }
+        copy_fails = _failures_for_target(verdicts, checks, "copy")
+        image_fails = _failures_for_target(verdicts, checks, "image")
+        if arbiter and n >= escalate_after and (copy_fails or image_fails):
+            if on_event:
+                on_event("escalated", n, {"to": WONDER_MODEL})
+            feedback = {
+                "copy": (await asyncio.to_thread(arbitrate, provider, copy_fails, run_input, "copy"))
+                if copy_fails else None,
+                "image": (await asyncio.to_thread(arbitrate, provider, image_fails, run_input, "image"))
+                if image_fails else None,
+            }
+        else:
+            feedback = {
+                "copy": build_feedback(copy_fails) or None,
+                "image": build_feedback(image_fails) or None,
+            }
 
     final = {"copy": artifacts.get("copy", ""), "image": artifacts.get("image_path", "")}
     passed = bool(iterations and iterations[-1].passed)
