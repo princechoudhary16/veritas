@@ -96,16 +96,17 @@ def stream():
     mode = request.args.get("mode", "live")
     policy_name = request.args.get("policy", "")
     partner = request.args.get("partner", "") in ("1", "true", "on", "yes")
+    surgical = request.args.get("surgical", "") in ("1", "true", "on", "yes")
     q = queue.Queue()
     if mode == "replay":
         threading.Thread(target=_replay, args=(q, policy_name), daemon=True).start()
     else:
-        threading.Thread(target=_live, args=(q, policy_name, partner), daemon=True).start()
+        threading.Thread(target=_live, args=(q, policy_name, partner, surgical), daemon=True).start()
     return Response(_sse(q), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-def _live(q, policy_name, partner=False):
+def _live(q, policy_name, partner=False, surgical=False):
     try:
         path = _policy_path(policy_name)
         if not path:
@@ -119,6 +120,7 @@ def _live(q, policy_name, partner=False):
                    "payload": {"message": "Partner routing requested but BASETEN_API_KEY is not configured."}})
             return
         routed = f"{critic_provider.label}/{critic_provider.model}" if critic_provider else None
+        surgical_repair = surgical or policy.image_repair == "edit"
         run_input = {"brief": policy.brief, "source_truth": policy.source_truth,
                      "target_object": policy.target_object, "scene_prompt": policy.scene_prompt}
         q.put({"kind": "start", "spend": 0.0,
@@ -135,7 +137,8 @@ def _live(q, policy_name, partner=False):
             q.put(ev)
 
         result = asyncio.run(run_engine(policy, run_input, provider,
-                                        critic_provider=critic_provider, on_event=on_event))
+                                        critic_provider=critic_provider,
+                                        surgical_repair=surgical_repair, on_event=on_event))
 
         os.makedirs(os.path.join(HERE, "runs"), exist_ok=True)
         with open(os.path.join(HERE, "runs", f"engine_{policy.name}_{int(time.time())}.json"), "w") as f:
@@ -209,6 +212,7 @@ INDEX_HTML = r"""<!doctype html>
   .vtag{font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
   .vtag.pass{color:var(--pass);border-color:#1f6b53;background:#0f2a22}
   .vtag.fail{color:var(--fail);border-color:#7a2f2f;background:#2a1414}
+  .opbadge{font-size:12px;color:var(--accent)}
   .body{display:grid;grid-template-columns:260px 1fr;gap:16px}
   @media(max-width:720px){.body{grid-template-columns:1fr}}
   .shot-wrap{position:relative;width:100%;aspect-ratio:1}
@@ -244,6 +248,9 @@ INDEX_HTML = r"""<!doctype html>
       <button class="btn-replay" id="replayBtn" onclick="start('replay')">Replay last run</button>
       <label class="switch" id="partnerLabel">
         <input type="checkbox" id="partner"> burst critics to Baseten
+      </label>
+      <label class="switch" title="Repair images by editing the flagged image in place">
+        <input type="checkbox" id="surgical"> surgical repair
       </label>
       <div class="pill">
         <span class="chip" id="partner-chip" style="display:none"></span>
@@ -297,7 +304,8 @@ function start(mode){
   setStatus(mode==='replay'?'replaying…':'running live…');
   const policy=encodeURIComponent(document.getElementById('policy').value);
   const partner=(mode==='live' && document.getElementById('partner').checked) ? '&partner=1' : '';
-  es=new EventSource('/stream?mode='+mode+'&policy='+policy+partner);
+  const surgical=(mode==='live' && document.getElementById('surgical').checked) ? '&surgical=1' : '';
+  es=new EventSource('/stream?mode='+mode+'&policy='+policy+partner+surgical);
   es.onmessage=e=>handle(JSON.parse(e.data));
   es.onerror=()=>{if(es){es.close();es=null;}busy(false);};
 }
@@ -307,7 +315,8 @@ function card(n){
   if(el)return el;
   el=document.createElement('div');el.className='card';el.id='iter-'+n;
   el.innerHTML='<div class="card-head">Iteration '+n+
-    ' <span class="vtag" id="vtag-'+n+'">verifying…</span></div>'+
+    ' <span class="vtag" id="vtag-'+n+'">verifying…</span>'+
+    ' <span class="opbadge" id="op-'+n+'"></span></div>'+
     '<div class="body"><div class="shot-wrap"><img class="shot" id="shot-'+n+'" alt="generated image">'+
     '<svg class="overlay" id="ovl-'+n+'" preserveAspectRatio="none"></svg></div>'+
     '<div><pre class="copy" id="copy-'+n+'" style="display:none"></pre>'+
@@ -368,6 +377,8 @@ function handle(ev){
     if(ev.payload.image_url)img.src=ev.payload.image_url;
     const copy=document.getElementById('copy-'+ev.n);
     if(ev.payload.copy){copy.style.display='';copy.textContent=ev.payload.copy;}
+    const op=document.getElementById('op-'+ev.n);
+    if(op && ev.payload.image_op==='edited'){ op.textContent='surgically edited'; }
   }else if(ev.kind==='verified'){
     const el=card(ev.n);
     const cont=el.querySelector('.checks');cont.innerHTML='';

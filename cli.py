@@ -24,6 +24,8 @@ def main() -> None:
     ap.add_argument("--receipt", default="veritas.lock.json", help="where to write the receipt")
     ap.add_argument("--partner", action="store_true",
                     help="route text critics to the Baseten inference partner (hybrid)")
+    ap.add_argument("--surgical", action="store_true",
+                    help="repair images by editing the flagged image in place (not full regen)")
     args = ap.parse_args()
 
     policy = load_policy(args.policy)
@@ -39,10 +41,15 @@ def main() -> None:
         raise SystemExit("--partner set but BASETEN_API_KEY is not configured in the environment")
     if critic_provider is not None:
         print(f"Hybrid routing: text critics -> {critic_provider.label}/{critic_provider.model}")
+    surgical = args.surgical or policy.image_repair == "edit"
+    if surgical:
+        print("Surgical repair: image fixes edit the flagged image in place (no full regen)")
 
     def on_event(kind, n, payload):
         if kind == "generated":
-            print(f"\n[iteration {n}] generated artifacts")
+            op = payload.get("image_op", "")
+            tag = f" (image {op})" if op and op != "kept" else ""
+            print(f"\n[iteration {n}] artifacts{tag}")
         elif kind == "tier":
             for v in payload["verdicts"]:
                 mark = "PASS" if v["passed"] else "FAIL"
@@ -57,7 +64,8 @@ def main() -> None:
 
     print(f"Policy: {policy.name}  ({policy.theme})")
     result = asyncio.run(run_engine(policy, run_input, provider,
-                                    critic_provider=critic_provider, on_event=on_event))
+                                    critic_provider=critic_provider, surgical_repair=surgical,
+                                    on_event=on_event))
 
     with open(args.receipt, "w") as f:
         json.dump(result.receipt, f, indent=2)
