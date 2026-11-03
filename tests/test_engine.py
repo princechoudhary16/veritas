@@ -55,7 +55,7 @@ def _policy():
 def test_short_circuit_fix_and_receipt(tmp_path, monkeypatch):
     state = {"grounding_calls": 0}
 
-    async def fake_run_check(check, provider, artifacts, run_input):
+    async def fake_run_check(check, provider, artifacts, run_input, critic_provider=None):
         if check.name == "grounding":
             state["grounding_calls"] += 1
             ok = state["grounding_calls"] >= 2  # fails first pass, passes after a fix
@@ -84,7 +84,7 @@ def test_short_circuit_fix_and_receipt(tmp_path, monkeypatch):
 
 
 def test_budget_guard_stops(tmp_path, monkeypatch):
-    async def always_fail(check, provider, artifacts, run_input):
+    async def always_fail(check, provider, artifacts, run_input, critic_provider=None):
         return Verdict(check.name, False, 0.0, "nope", "fix it")
 
     monkeypatch.setattr(engine_mod, "run_check", always_fail)
@@ -114,7 +114,7 @@ def test_cache_reuses_stable_copy(tmp_path, monkeypatch):
     )
     state = {"grounding_calls": 0, "claim_calls": 0}
 
-    async def fake_run_check(check, provider, artifacts, run_input):
+    async def fake_run_check(check, provider, artifacts, run_input, critic_provider=None):
         if check.name == "grounding":
             state["grounding_calls"] += 1
             ok = state["grounding_calls"] >= 2
