@@ -21,6 +21,9 @@
 3. Record at 1920×1080 (or 1280×720). Hide bookmarks bar, mute notifications.
 4. Have a second tab on the GitHub repo and one on the architecture diagram in the README.
 5. Keep cursor moves slow and deliberate; **pause** on the overlays and the receipt.
+6. For the partner beat, make sure `BASETEN_API_KEY` is set in `.env` (the toggle
+   is disabled without it). That beat uses a quick **live** run of the copy-only
+   `health_claim_safety` pack, so it finishes in a few seconds on camera.
 
 ---
 
@@ -38,7 +41,7 @@
 - **VO:** "Veritas is a verification engine for multimodal AI — CI/CD for generative models. It generates with Meta's models, then cross-checks every output against a policy, in a loop, until it provably passes. Nothing ships unverified."
 - **LT:** *Generate → verify → repeat → receipt.*
 
-### 0:33 – 1:35 · Live demo: catch-and-fix (the core)
+### 0:33 – 1:30 · Live demo: catch-and-fix (the core)
 - **DO:** Select `commercial_brand_guard`, click **Replay last run** (or Run verification).
 - **SCREEN:** Iterations stream in; linger on each critic row and the image overlays.
 - **VO (as it plays):**
@@ -50,17 +53,23 @@
 - **VO:** "Shipped — with a cryptographic receipt: SHA-256 hashes of the exact assets, every critic's score, and the credits saved by short-circuiting."
 - **LT:** *SAM 3.1 grounding · cross-modal consistency · short-circuit saved $0.03.*
 
-### 1:35 – 2:05 · The pivot (platform, not wrapper)
+### 1:30 – 1:50 · The pivot (platform, not wrapper)
 - **VO:** "Now the important part — none of this is hard-coded. The policy is just a file. Watch me switch it."
 - **DO:** Change the dropdown to `synthetic_data_gate`; click **Replay last run**.
 - **SCREEN:** The warehouse image with green boxes on the forklift and every pallet.
-- **VO:** "Same engine — now it's a synthetic-data gate for robotics. It admits an image into a training set only if SAM 3.1 confirms the forklift, counts the pallets, and a vision check certifies the scene is physically plausible. Commerce to robotics, in one dropdown."
+- **VO:** "Same engine — now it's a synthetic-data gate for robotics: SAM 3.1 confirms the forklift, counts the pallets, and a vision check certifies the scene is physically plausible. Commerce to robotics, in one dropdown."
 - **LT:** *One engine. Any domain. Both hackathon themes.*
 
-### 2:05 – 2:35 · Under the hood
-- **SCREEN:** README architecture section / the tiered-DAG diagram; a flash of `pytest` green and the CI badge.
-- **VO:** "Under the hood it's an async, tiered DAG. Cheap deterministic and spatial checks gate the expensive semantic court, so failures short-circuit and save money. Generators and critics are always separate models — separation of powers against judge bias. It's grounded in Self-Refine, Chain-of-Verification, and Segment Anything — open-source, tested, CI-green."
-- **LT:** *async tiered DAG · independent critics · open source · tests + CI.*
+### 1:50 – 2:10 · Open-weights critics on a partner (live)
+- **DO:** Tick the **"burst critics to Baseten"** toggle, select `health_claim_safety`, and click **Run verification** (copy-only, so it finishes in seconds).
+- **SCREEN:** The **"critics → baseten/openai/gpt-oss-120b"** chip; then the green banner's partner-spend figure.
+- **VO:** "And it isn't locked to one vendor. Flip this toggle, and the text critics run on open-weights models on an inference partner — Baseten here — while generation and SAM stay on Meta. The receipt tracks every provider's spend separately. Hybrid routing, one click."
+- **LT:** *Meta for generation + vision · Baseten for open-weights critics.*
+
+### 2:10 – 2:35 · Under the hood
+- **SCREEN:** README architecture section / the tiered-DAG diagram; a flash of `pytest` green and the CI badge; the receipt JSON.
+- **VO:** "Under the hood it's an async, tiered DAG. Cheap deterministic and spatial checks gate the expensive semantic court, so failures short-circuit — and verdicts for unchanged work are cached. On a real run that cut credits by nearly half. Generators and critics are always separate models — separation of powers against judge bias — and it's grounded in Self-Refine, Chain-of-Verification, and Segment Anything. Open-source, tested, CI-green."
+- **LT:** *tiered DAG · short-circuit + cache (~46%) · independent critics · open source.*
 
 ### 2:35 – 3:00 · Close
 - **SCREEN:** Back to the green "verified" banner + receipt; end card with the repo URL.
@@ -70,12 +79,14 @@
 ---
 
 ## If you only have 60 seconds (elevator cut)
-0:00 hook (8s) → 0:08 commercial catch-and-fix, iterations 1→final (32s) → 0:40 switch
-to robotics, one run (12s) → 0:52 "one engine, any domain — here's the receipt" + repo URL (8s).
+0:00 hook (8s) → 0:08 commercial catch-and-fix, iterations 1→final (30s) → 0:38 switch
+to robotics, one run (10s) → 0:48 flip the Baseten toggle, one line on hybrid routing (6s) →
+0:54 "one engine, any domain — here's the receipt" + repo URL (6s).
 
 ## Tips that win points
 - **Show a failure.** The rejected red state → green fix is the whole story; don't rush past it.
 - **Pause on the receipt.** Judges reward verifiable, production-minded engineering.
 - **Say the numbers.** "Short-circuit saved $0.03 this run" and "SAM 3.1 counted 26 pallets" land.
 - **Make the pivot deliberate.** The dropdown switch is the "it's a platform" moment — let it breathe.
+- **The Baseten toggle is a 10-second flex** — it proves partner integration (a judging bonus) and vendor-independence; name the chip out loud as it appears.
 - **End on the repo URL** so judges can open the open-source code immediately.
