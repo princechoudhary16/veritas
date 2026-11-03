@@ -2,14 +2,14 @@
   "veritas_version": "0.2.0",
   "policy": "commercial_brand_guard",
   "theme": "Build for Your World",
-  "generated_at": "2026-11-03T06:31:13Z",
+  "generated_at": "2026-11-03T07:17:44Z",
   "passed": true,
   "stopped_reason": "passed",
-  "iterations": 2,
+  "iterations": 6,
   "assets": {
-    "copy_sha256": "0a393f795fd9c6c2d7ce10a52ac99b0423ea016ee48bf158d8843510d7f86918",
-    "image_sha256": "196d19839d1188e5d72627f3f9eb614fde1c83a0036716c7f79a16de9c3e17d9",
-    "image_path": "out/commercial_brand_guard_iter_2.webp"
+    "copy_sha256": "4dcbc982f8369c95a6d8d5fc44b3237f7ef4a46d43bc2aed2aca5246f9604005",
+    "image_sha256": "05c19e08f6d35420246092d7af9c4bac41e85e57a858cdbe8e7293a0be04094b",
+    "image_path": "out/commercial_brand_guard_iter_6.webp"
   },
   "verification": {
     "checks": [
@@ -69,21 +69,22 @@
       },
       "brand_tone": {
         "pass": true,
-        "score": 0.95
+        "score": 1.0
       },
       "consistency": {
         "pass": true,
-        "score": 0.9
+        "score": 0.95
       }
     }
   },
   "economics": {
-    "credits_spent_usd": 0.043684,
+    "credits_spent_usd": 0.118158,
     "credits_saved_by_short_circuit_usd": 0.03,
+    "credits_saved_by_cache_usd": 0.072,
     "spend_by_model": {
-      "muse-spark-1.3": 0.018684,
-      "muse-image-1.0": 0.02,
-      "sam-3.1": 0.005
+      "muse-spark-1.3": 0.043158,
+      "muse-image-1.0": 0.06,
+      "sam-3.1": 0.015
     }
   }
 }

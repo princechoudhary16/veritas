@@ -62,8 +62,9 @@ def main() -> None:
         json.dump({"policy": policy.name, "passed": result.passed,
                    "stopped_reason": result.stopped_reason, "spend_usd": result.spend_usd,
                    "iterations": result.iterations, "receipt": result.receipt}, f)
-    print("Credits saved by short-circuiting: "
-          f"${result.receipt['economics']['credits_saved_by_short_circuit_usd']:.4f}")
+    econ = result.receipt["economics"]
+    print(f"Credits saved by short-circuiting: ${econ['credits_saved_by_short_circuit_usd']:.4f}")
+    print(f"Credits saved by cache:            ${econ['credits_saved_by_cache_usd']:.4f}")
 
 
 if __name__ == "__main__":

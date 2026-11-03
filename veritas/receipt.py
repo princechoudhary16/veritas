@@ -33,6 +33,12 @@ def build_receipt(policy, run_input, iterations, artifacts, provider, passed, st
             ctype = next((c.type for c in policy.checks if c.name == name), None)
             saved += COST_EST.get(ctype, 0.0)
 
+    cache_saved = 0.0
+    for it in iterations:
+        for name in getattr(it, "cached", []):
+            ctype = next((c.type for c in policy.checks if c.name == name), None)
+            cache_saved += COST_EST.get(ctype, 0.0)
+
     final_scores = {}
     if iterations:
         for v in iterations[-1].verdicts:
@@ -61,6 +67,7 @@ def build_receipt(policy, run_input, iterations, artifacts, provider, passed, st
         "economics": {
             "credits_spent_usd": round(provider.usage.spend_usd, 6),
             "credits_saved_by_short_circuit_usd": round(saved, 6),
+            "credits_saved_by_cache_usd": round(cache_saved, 6),
             "spend_by_model": {k: round(v, 6) for k, v in provider.usage.by_model.items()},
         },
     }
