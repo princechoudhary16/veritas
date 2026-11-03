@@ -136,3 +136,34 @@ def test_cache_reuses_stable_copy(tmp_path, monkeypatch):
     assert state["claim_calls"] == 1
     assert result.iterations[1]["cached"] == ["claim_support"]
     assert result.receipt["economics"]["credits_saved_by_cache_usd"] > 0
+
+
+def test_surgical_repair_edits_instead_of_regenerating(tmp_path, monkeypatch):
+    policy = Policy(
+        name="surg_policy",
+        checks=[Check(name="grounding", type="grounding", tier=1, target="image")],
+        max_iters=4, budget_usd=5.0, produces=["image"],
+    )
+    state = {"grounding_calls": 0}
+
+    async def fake_run_check(check, provider, artifacts, run_input, critic_provider=None):
+        state["grounding_calls"] += 1
+        ok = state["grounding_calls"] >= 2
+        return Verdict("grounding", ok, 1.0 if ok else 0.0, "img", "" if ok else "add the product")
+
+    calls = {"gen": 0, "edit": 0}
+    monkeypatch.setattr(engine_mod, "run_check", fake_run_check)
+    monkeypatch.setattr(engine_mod, "generate_scene_image",
+                        lambda p, s, f=None: (calls.__setitem__("gen", calls["gen"] + 1)
+                                              or base64.b64encode(f"g{calls['gen']}".encode()).decode()))
+    monkeypatch.setattr(engine_mod, "edit_scene_image",
+                        lambda p, img, instr: (calls.__setitem__("edit", calls["edit"] + 1)
+                                               or base64.b64encode(f"e{calls['edit']}".encode()).decode()))
+
+    result = asyncio.run(run_engine(
+        policy, {"brief": "b", "source_truth": "s", "target_object": "o", "scene_prompt": "sc"},
+        _FakeProvider(), surgical_repair=True, out_dir=str(tmp_path)))
+
+    assert result.passed is True
+    assert calls["gen"] == 1   # first image generated from scratch
+    assert calls["edit"] == 1  # the fix was a surgical edit, not a regeneration
