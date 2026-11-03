@@ -104,6 +104,19 @@ class MetaClient:
         self.usage.add(model, PRICES[model]["per_image"] * n)
         return data.get("data", [])
 
+    def edit_image(self, prompt: str, image_b64: str, *, n: int = 1,
+                   model: str = IMAGE_MODEL, mime: str = "image/webp") -> list[dict]:
+        """Instruction-based in-place edit of an existing image (POST /images/edits).
+
+        Starts from the current (flagged) image and changes only what the prompt
+        asks, preserving the rest of the already-verified scene.
+        """
+        uri = f"data:{mime};base64,{image_b64}"
+        payload = {"model": model, "prompt": prompt, "images": [{"image_url": uri}], "n": n}
+        data = self._post("/images/edits", payload)
+        self.usage.add(model, PRICES[model]["per_image"] * n)
+        return data.get("data", [])
+
     # --- segmentation / grounding (SAM via Responses API) ---
     def segment(self, text: str, image_url: str, model: str = SEG_MODEL) -> tuple[str, dict]:
         input = [{

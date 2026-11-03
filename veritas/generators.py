@@ -53,3 +53,13 @@ def generate_scene_image(client, scene_prompt: str, feedback: str | None = None)
         prompt += ". " + feedback
     data = client.generate_image(prompt, n=1)
     return data[0].get("b64_json", "") if data else ""
+
+
+def edit_scene_image(client, image_b64: str, instruction: str) -> str:
+    """Surgically edit the current image per the fix instruction; return new b64.
+
+    Used by the Fixer to repair only what a critic flagged, instead of
+    regenerating the whole scene from the prompt.
+    """
+    data = client.edit_image(instruction, image_b64, n=1)
+    return data[0].get("b64_json", "") if data else ""
