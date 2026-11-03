@@ -1,0 +1,42 @@
+name: trust_and_safety_gate
+description: >
+  Misinformation gate that complements content provenance (C2PA). Provenance
+  can't flag a real photo reused with a false caption, or an unsigned fake.
+  Veritas verifies that the caption's claims are grounded in the source facts
+  and that the image actually depicts what the caption says — catching
+  out-of-context and misleading image/caption pairings.
+theme: Push the Frontier
+
+brief: >
+  Write a single factual news caption for a photo, using ONLY the verified
+  facts. Do not speculate or add unverified details.
+source_truth: |
+  Verified facts: a peaceful community tree-planting event in a city park on a
+  sunny afternoon; about 30 volunteers; organised by a local school.
+target_object: tree
+scene_prompt: >
+  volunteers planting young trees in a city park on a sunny afternoon
+produces: [copy, image]
+
+checks:
+  # Tier 1 — the named subject must actually be in the image
+  - name: subject_grounding
+    type: grounding
+    tier: 1
+    target: image
+    params:
+      object: tree
+      min_area_frac: 0.02
+  # Tier 2 — caption grounded in facts + image matches caption
+  - name: caption_grounded
+    type: claim_support
+    tier: 2
+    target: copy
+  - name: image_caption_consistency
+    type: consistency
+    tier: 2
+    target: image
+
+limits:
+  max_iters: 6
+  budget_usd: 5.0

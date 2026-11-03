@@ -1,0 +1,44 @@
+name: accessibility_gate
+description: >
+  Accessibility gate for generated creative. Enforces plain-language copy
+  (CDC/AMA guidance, Flesch Reading Ease >= 70), legible in-image text
+  (WCAG 2.2 SC 1.4.3 contrast), and an image that matches its description so the
+  copy works as alt text (WCAG SC 1.1.1).
+theme: Build for Your World
+
+brief: >
+  Write a short, warm announcement for a community library's free coding
+  workshop for teens. Keep it very easy to read.
+source_truth: |
+  Event: Free coding workshop for teens
+  Host: Riverside Community Library
+  When: Saturdays, 10am to 12pm
+  Cost: Free
+  Bring: a laptop (loaners available)
+target_object: ""
+scene_prompt: >
+  a bright, welcoming photo of teenagers learning to code on laptops at a
+  library table
+produces: [copy, image]
+
+checks:
+  # Tier 1 — deterministic plain-language gate
+  - name: reading_level
+    type: reading_level
+    tier: 1
+    target: copy
+    params:
+      min: 70
+  # Tier 2 — vision: in-image text legibility + alt-text fidelity
+  - name: text_legibility
+    type: text_legibility
+    tier: 2
+    target: image
+  - name: alt_text_fidelity
+    type: consistency
+    tier: 2
+    target: image
+
+limits:
+  max_iters: 6
+  budget_usd: 5.0
