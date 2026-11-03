@@ -11,6 +11,30 @@ Built for the **Meta Global AI Developer Hackathon** on the Meta Model API
 
 ![Veritas verifying a robotics synthetic-data scene with SAM 3.1 box overlays](docs/ui-robotics.jpg)
 
+## For hackathon judges
+
+Everything below is implemented and tested (30 tests, CI-green) — no slideware.
+
+| Capability | Meta / partner tech | Where in the repo |
+|---|---|---|
+| Copy, brand, consistency, legibility, plausibility critics | **Muse Spark** (muse-spark-1.3, text + vision) | `veritas/critics.py` |
+| Image generation + **surgical in-place edits** | **Muse Image** (`/images/generations`, `/images/edits`) | `veritas/meta_client.py`, `veritas/generators.py` |
+| Grounding + object counting (masks, boxes) | **SAM 3.1** (sam-3.1) | `veritas/meta_client.py`, `veritas/critics.py`, `veritas/sam.py` |
+| Tier-3 deep-reasoning escalation arbitrator | **Muse Wonder** (muse-wonder-1.0) | `veritas/fixer.py` → `arbitrate` |
+| Meta Model API client + live spend ledger | Meta Model API (`api.meta.ai/v1`) | `veritas/meta_client.py` |
+| Hybrid routing of text critics to open weights | **Baseten** (OpenAI-compatible) | `veritas/providers.py`, `veritas/config.py` |
+| Formal numeric verification | **Z3** SMT solver | `veritas/checks.py` → `_z3_constraint` |
+| Receipt bound into the image | **C2PA** content credentials | `veritas/c2pa_export.py` |
+| Self-improving preference dataset | **DPO** export | `veritas/dpo.py` |
+| Tiered DAG · short-circuit · content cache | — | `veritas/engine.py` |
+| Cryptographic audit receipt | — | `veritas/receipt.py` |
+| Declarative policy packs (5 domains) | — | `policies/*.yaml` |
+
+```bash
+pytest -q
+python cli.py policies/commercial_brand_guard.yaml --partner --surgical --arbiter --c2pa
+```
+
 ## The idea
 
 Generative models are powerful but confidently wrong. Veritas treats every
