@@ -15,15 +15,20 @@ Built for the **Meta Global AI Developer Hackathon** on the Meta Model API
 
 Generative models are powerful but confidently wrong. Veritas treats every
 output as a *claim to be disproven*. The same engine runs any **Policy Pack**, so
-a domain is just a YAML file:
+a whole domain is just a YAML file — five ship today:
 
-- **Commercial Brand Guard** (*Build for Your World*) — ad copy + imagery checked
-  against product facts and brand rules.
-- **Synthetic Data Gate** (*Push the Frontier*) — admits a generated image into a
-  robot-perception training set only if objects are present, correctly counted,
-  prominent (an occlusion proxy), and physically plausible.
+| Policy Pack | Theme | Gates against | Grounded in |
+|---|---|---|---|
+| Commercial Brand Guard | Build for Your World | false ad claims, product misrepresentation | FTC advertising substantiation |
+| Accessibility Gate | Build for Your World | unreadable copy, illegible / mismatched creative | WCAG 2.2 (SC 1.1.1, 1.4.3), CDC plain-language |
+| Health Claim Safety | Build for Your World | dangerous / unsupported medical claims | FTC 2022 Health Products Guidance |
+| Synthetic Data Gate | Push the Frontier | bad robot-perception training data | object presence / count / plausibility |
+| Trust & Safety Gate | Push the Frontier | AI misinformation — out-of-context image↔caption pairs | complements C2PA provenance |
 
-Nothing changes between them but the policy.
+Nothing changes between them but the policy. (Real catches from live runs: a
+bottle marked "1000ml" against 750ml copy; health copy that failed plain-language
+and got auto-simplified; an image whose sign read "Wednesdays 4pm" while the copy
+said "Saturdays 10–12".)
 
 ## Architecture
 
@@ -57,11 +62,14 @@ policy pack (YAML)  +  source of truth
 | Type | Tier | Evidence | Model |
 |------|------|----------|-------|
 | `banned_terms`, `max_sentences` | 1 | deterministic (regex) | — |
+| `reading_level` | 1 | Flesch Reading Ease ≥ target | — |
+| `required_terms` | 1 | required text (e.g. a disclaimer) | — |
 | `grounding` | 1 | object present & prominent | SAM 3.1 |
 | `object_count` | 1 | instance count in range | SAM 3.1 |
 | `claim_support` | 2 | every claim backed by facts | Muse Spark |
 | `brand_tone` | 2 | tone / banned-claim compliance | Muse Spark |
 | `consistency` | 2 | image ↔ copy agreement | Muse Spark vision |
+| `text_legibility` | 2 | in-image text is readable (WCAG) | Muse Spark vision |
 | `scene_plausibility` | 2 | physically plausible scene | Muse Spark vision |
 
 Grounding failures caught in practice: a missing product, a bottle marked
@@ -83,7 +91,10 @@ Run a policy from the command line (writes a receipt):
 
 ```bash
 python cli.py policies/commercial_brand_guard.yaml
+python cli.py policies/accessibility_gate.yaml
+python cli.py policies/health_claim_safety.yaml
 python cli.py policies/synthetic_data_gate.yaml
+python cli.py policies/trust_and_safety_gate.yaml
 ```
 
 Live UI with a policy switcher, SAM box overlays, and a downloadable receipt:
