@@ -81,3 +81,51 @@ def grounding_critic(
         ),
         fix_hint="",
     )
+
+
+BRAND_CRITIC_INSTRUCTIONS = (
+    "You are a brand compliance reviewer, independent of the writer.\n"
+    "Given BRAND RULES and ad COPY, judge whether the copy obeys the rules: "
+    "tone, length, and any banned words or claims.\n"
+    "Respond with ONLY a JSON object, no other text:\n"
+    '{"pass": true/false, "score": 0.0-1.0, '
+    '"reason": "cite any violation, or confirm compliant", '
+    '"fix_hint": "specific instruction to fix the copy"}'
+)
+
+
+def brand_critic(client, copy: str, brand_rules: str, effort: str = "low") -> Verdict:
+    payload = f"BRAND RULES:\n{brand_rules}\n\nCOPY:\n{copy}"
+    text, _ = client.respond_text(
+        TEXT_MODEL, payload, instructions=BRAND_CRITIC_INSTRUCTIONS, reasoning_effort=effort
+    )
+    return parse_verdict("brand", text)
+
+
+CONSISTENCY_CRITIC_INSTRUCTIONS = (
+    "You are a cross-modal consistency reviewer. You are given ad COPY and the "
+    "campaign IMAGE. Judge whether the image CONTRADICTS the copy.\n"
+    "A FAIL is a clear contradiction: a different product, a dominant colour "
+    "that conflicts with the colour the copy emphasises, or a scene that "
+    "conflicts with the copy. Listing options the image does not all show is "
+    "NOT a contradiction, and generic marketing language is fine.\n"
+    "Respond with ONLY a JSON object, no other text:\n"
+    '{"pass": true/false, "score": 0.0-1.0, '
+    '"reason": "cite the contradiction, or confirm consistent", '
+    '"fix_hint": "how to change the IMAGE so it matches the copy"}'
+)
+
+
+def consistency_critic(client, copy: str, image_b64: str, effort: str = "low") -> Verdict:
+    data_uri = "data:image/webp;base64," + image_b64
+    inp = [{
+        "role": "user",
+        "content": [
+            {"type": "input_text", "text": "COPY:\n" + copy},
+            {"type": "input_image", "image_url": data_uri},
+        ],
+    }]
+    text, _ = client.respond_text(
+        TEXT_MODEL, inp, instructions=CONSISTENCY_CRITIC_INSTRUCTIONS, reasoning_effort=effort
+    )
+    return parse_verdict("consistency", text)
