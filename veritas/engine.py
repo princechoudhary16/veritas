@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import os
 from dataclasses import asdict, dataclass, field
 
@@ -22,6 +23,28 @@ from .checks import run_check
 from .fixer import build_feedback
 from .generators import generate_copy, generate_scene_image
 from .receipt import build_receipt
+
+# Which artifacts each check reads — the basis for content-addressable caching.
+_CHECK_DEPS = {
+    "banned_terms": ("copy",), "max_sentences": ("copy",), "reading_level": ("copy",),
+    "required_terms": ("copy",), "claim_support": ("copy",), "brand_tone": ("copy",),
+    "grounding": ("image",), "object_count": ("image",), "text_legibility": ("image",),
+    "scene_plausibility": ("image",), "consistency": ("copy", "image"),
+}
+
+
+def _artifact_hashes(artifacts: dict) -> dict:
+    h = {}
+    if artifacts.get("copy") is not None:
+        h["copy"] = hashlib.sha256(artifacts["copy"].encode("utf-8")).hexdigest()[:16]
+    if artifacts.get("image_b64"):
+        h["image"] = hashlib.sha256(artifacts["image_b64"].encode("utf-8")).hexdigest()[:16]
+    return h
+
+
+def _cache_key(check, hashes: dict):
+    deps = _CHECK_DEPS.get(check.type, ("copy", "image"))
+    return (check.name,) + tuple(hashes.get(d, "") for d in deps)
 
 
 @dataclass
@@ -33,6 +56,7 @@ class Iteration:
     spend_after: float
     tiers_run: list
     skipped: list
+    cached: list
 
 
 @dataclass
@@ -57,6 +81,7 @@ async def run_engine(policy, run_input: dict, provider, *, out_dir="out", on_eve
     os.makedirs(out_dir, exist_ok=True)
 
     artifacts: dict = {}
+    cache: dict = {}  # content-addressable: verdicts keyed by (check, artifact hashes)
     feedback = {"copy": None, "image": None}
     iterations: list[Iteration] = []
     stopped = "max_iters_reached"
@@ -83,15 +108,22 @@ async def run_engine(policy, run_input: dict, provider, *, out_dir="out", on_eve
             on_event("generated", n, {"copy": artifacts.get("copy", ""),
                                       "image": artifacts.get("image_path", "")})
 
-        # --- tiered verification with short-circuit ---
+        # --- tiered verification: short-circuit + content-addressable cache ---
+        hashes = _artifact_hashes(artifacts)
         verdicts = []
         tiers_run = []
         skipped = []
+        cached_names = []
         passed_all = True
         for tier in tiers:
             tier_checks = [c for c in checks if c.tier == tier]
-            results = await asyncio.gather(
-                *[run_check(c, provider, artifacts, run_input) for c in tier_checks])
+            to_run = [c for c in tier_checks if _cache_key(c, hashes) not in cache]
+            fresh = await asyncio.gather(
+                *[run_check(c, provider, artifacts, run_input) for c in to_run])
+            for c, v in zip(to_run, fresh):
+                cache[_cache_key(c, hashes)] = v
+            results = [cache[_cache_key(c, hashes)] for c in tier_checks]
+            cached_names += [c.name for c in tier_checks if c not in to_run]
             verdicts.extend(results)
             tiers_run.append(tier)
             if on_event:
@@ -104,9 +136,10 @@ async def run_engine(policy, run_input: dict, provider, *, out_dir="out", on_eve
         snapshot = {"copy": artifacts.get("copy", ""), "image": artifacts.get("image_path", "")}
         iterations.append(Iteration(
             n, snapshot, [v.to_dict() for v in verdicts], passed_all,
-            round(provider.usage.spend_usd, 6), tiers_run, skipped))
+            round(provider.usage.spend_usd, 6), tiers_run, skipped, cached_names))
         if on_event:
-            on_event("verified", n, {"verdicts": [v.to_dict() for v in verdicts], "skipped": skipped})
+            on_event("verified", n, {"verdicts": [v.to_dict() for v in verdicts],
+                                     "skipped": skipped, "cached": cached_names})
 
         if passed_all:
             stopped = "passed"
