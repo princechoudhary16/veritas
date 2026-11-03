@@ -1,0 +1,54 @@
+name: synthetic_data_gate
+description: >
+  Synthetic Data Gate for robot perception. Admits a generated image into a
+  training set only if the required objects are present and correctly counted,
+  prominent enough (an occlusion proxy), and the scene is physically plausible.
+  Same engine as the commercial pack — only the policy changes.
+theme: Push the Frontier
+
+target_object: forklift
+scene_prompt: >
+  a photorealistic warehouse interior with a forklift and stacked wooden
+  pallets, industrial lighting, wide shot
+produces: [image]
+
+checks:
+  # Tier 1 — spatial gate (SAM 3.1), short-circuits the semantic check
+  - name: forklift_present
+    type: grounding
+    tier: 1
+    target: image
+    params:
+      object: forklift
+      min_area_frac: 0.03
+  - name: forklift_count
+    type: object_count
+    tier: 1
+    target: image
+    params:
+      object: forklift
+      min: 1
+      max: 3
+  - name: pallets_present
+    type: object_count
+    tier: 1
+    target: image
+    params:
+      object: pallet
+      min: 1
+      max: 50
+
+  # Tier 2 — physical plausibility (vision)
+  - name: scene_plausibility
+    type: scene_plausibility
+    tier: 2
+    target: image
+    params:
+      rubric: >
+        a realistic industrial warehouse interior suitable as robot-perception
+        training data; no rendering artifacts, warped geometry, floating
+        objects, or impossible physics
+
+limits:
+  max_iters: 5
+  budget_usd: 5.0
