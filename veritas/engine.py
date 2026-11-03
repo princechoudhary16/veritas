@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass, field
 
 from .checks import run_check
 from .fixer import build_feedback
-from .generators import generate_copy, generate_scene_image
+from .generators import edit_scene_image, generate_copy, generate_scene_image
 from .receipt import build_receipt
 
 # Which artifacts each check reads — the basis for content-addressable caching.
@@ -76,7 +76,7 @@ def _failures_for_target(verdicts, checks, target):
 
 
 async def run_engine(policy, run_input: dict, provider, *, critic_provider=None,
-                     out_dir="out", on_event=None) -> EngineResult:
+                     surgical_repair=False, out_dir="out", on_event=None) -> EngineResult:
     checks = policy.checks
     tiers = sorted({c.tier for c in checks})
     os.makedirs(out_dir, exist_ok=True)
@@ -96,9 +96,16 @@ async def run_engine(policy, run_input: dict, provider, *, critic_provider=None,
         if "copy" in policy.produces and (artifacts.get("copy") is None or feedback["copy"]):
             artifacts["copy"] = await asyncio.to_thread(
                 generate_copy, provider, run_input["brief"], run_input["source_truth"], feedback["copy"])
+        image_op = "kept"
         if "image" in policy.produces and (artifacts.get("image_b64") is None or feedback["image"]):
-            b64 = await asyncio.to_thread(
-                generate_scene_image, provider, run_input["scene_prompt"], feedback["image"])
+            if surgical_repair and artifacts.get("image_b64") and feedback["image"]:
+                b64 = await asyncio.to_thread(
+                    edit_scene_image, provider, artifacts["image_b64"], feedback["image"])
+                image_op = "edited"
+            else:
+                b64 = await asyncio.to_thread(
+                    generate_scene_image, provider, run_input["scene_prompt"], feedback["image"])
+                image_op = "generated"
             path = os.path.join(out_dir, f"{policy.name}_iter_{n}.webp")
             with open(path, "wb") as f:
                 f.write(base64.b64decode(b64))
@@ -107,7 +114,8 @@ async def run_engine(policy, run_input: dict, provider, *, critic_provider=None,
 
         if on_event:
             on_event("generated", n, {"copy": artifacts.get("copy", ""),
-                                      "image": artifacts.get("image_path", "")})
+                                      "image": artifacts.get("image_path", ""),
+                                      "image_op": image_op})
 
         # --- tiered verification: short-circuit + content-addressable cache ---
         hashes = _artifact_hashes(artifacts)

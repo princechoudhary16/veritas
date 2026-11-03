@@ -50,6 +50,7 @@ class Policy:
     scene_prompt: str = ""
     produces: list = field(default_factory=lambda: ["copy", "image"])
     checks: list = field(default_factory=list)
+    image_repair: str = "regenerate"  # "regenerate" | "edit" (surgical in-place)
     max_iters: int = 6
     budget_usd: float = 5.0
 
@@ -73,6 +74,7 @@ def load_policy(path: str) -> Policy:
         scene_prompt=raw.get("scene_prompt", ""),
         produces=raw.get("produces", ["copy", "image"]),
         checks=checks,
+        image_repair=raw.get("image_repair", "regenerate"),
         max_iters=int(limits.get("max_iters", 6)),
         budget_usd=float(limits.get("budget_usd", 5.0)),
     )
