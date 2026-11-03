@@ -64,6 +64,7 @@ policy pack (YAML)  +  source of truth
 | `banned_terms`, `max_sentences` | 1 | deterministic (regex) | — |
 | `reading_level` | 1 | Flesch Reading Ease ≥ target | — |
 | `required_terms` | 1 | required text (e.g. a disclaimer) | — |
+| `z3_constraint` | 1 | **formal** numeric proof (Z3 SMT) | — |
 | `grounding` | 1 | object present & prominent | SAM 3.1 |
 | `object_count` | 1 | instance count in range | SAM 3.1 |
 | `claim_support` | 2 | every claim backed by facts | Muse Spark |
@@ -137,12 +138,33 @@ toggle, so the routing is visible live:
 
 ![Hybrid routing: text critics on Baseten, generation and SAM 3.1 on Meta](docs/ui-partner.jpg)
 
+## Formal verification (Z3)
+
+LLM critics are probabilistic. For claims that must be *exactly* right —
+capacities, prices, doses, discounts — Veritas compiles the policy's numeric
+rules into the **Z3 SMT solver**: a regex (or `muse-spark`) extracts the stated
+numbers, and Z3 formally proves they satisfy the constraint. No LLM vibes — a
+`z3_constraint` check returns a mathematical proof, and as a cheap Tier-1 gate a
+numeric violation short-circuits the whole semantic court.
+
+## Self-improving flywheel (DPO export)
+
+Every run that rejected a first draft and shipped a repaired one is a verified
+`(rejected, chosen)` preference pair. Export them as a DPO dataset to post-train
+the generator so it stops making the mistakes the verifier keeps catching:
+
+```bash
+python -m veritas.dpo              # writes veritas_dpo.jsonl from runs/
+# or: GET /api/export-dpo-dataset from the running UI server
+```
+
 ## Repo layout
 
 | Path | Role |
 |------|------|
 | `veritas/policy.py` | policy pack types + YAML loader + validation |
 | `veritas/providers.py` | OpenAI-compatible partner adapter (Baseten/Fireworks/Modal) |
+| `veritas/dpo.py` | DPO preference-pair export from the audit ledger |
 | `veritas/engine.py` | async tiered DAG, short-circuit, fix routing, budget |
 | `veritas/checks.py` | check registry (deterministic + LLM/SAM), tiered |
 | `veritas/critics.py` | the independent critics |
@@ -158,6 +180,23 @@ Self-Refine (Madaan et al., 2023), Reflexion (Shinn et al., 2023),
 Chain-of-Verification (Dhuliawala et al., 2023), FActScore (Min et al., 2023),
 Constitutional AI (Bai et al., 2022), LLM-as-a-Judge (Zheng et al., 2023), and
 Segment Anything (Kirillov et al., 2023).
+
+## Roadmap (production wedges)
+
+Veritas is a verification protocol; these are the high-value wedges it extends to:
+
+- **Sim-to-real robotics data filtering** (*Push the Frontier*) — SAM 3.1 masks +
+  spatial critics reject physically impossible synthetic frames before training.
+  Next: SAM 3.1 **video** temporal-stability checks for Muse Wonder clips.
+- **Regulated enterprise compliance** (pharma / fintech / legal) — Z3 symbolic
+  rules + SAM geometry locks + audit manifests on every asset. Next: embed the
+  receipt as a **C2PA Content Credential** directly in the exported media.
+- **Autonomous UI visual-regression CI/CD** (*Push the Frontier*) — segment and
+  verify rendered UI components on every pull request.
+
+Also planned: surgical in-place repair via Muse Image `/v1/images/edits` (fix
+only the flagged region instead of regenerating), and audio disclaimer
+verification via Muse Voice Transcribe.
 
 ## License
 
