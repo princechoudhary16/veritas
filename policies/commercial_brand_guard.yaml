@@ -1,0 +1,65 @@
+name: commercial_brand_guard
+description: >
+  Commercial Brand Guard. Verifies ad copy and imagery against the product's
+  facts and the brand's rules before anything ships. Tier 1 is a cheap
+  deterministic + spatial gate; Tier 2 is the semantic multimodal court.
+theme: Build for Your World
+
+brief: >
+  Create a premium, confident ad for the HydroPeak water bottle aimed at
+  serious outdoor enthusiasts.
+
+source_truth: |
+  Product: HydroPeak water bottle
+  Material: stainless steel
+  Capacity: 750 ml
+  Keeps drinks cold for 24 hours
+  Dishwasher safe
+  Colors: slate grey, forest green
+  Price: $29
+
+target_object: water bottle
+scene_prompt: an alpine hiking trail at golden hour with dramatic mountains
+produces: [copy, image]
+
+checks:
+  # Tier 1 — cheap deterministic + spatial gate (short-circuits the court)
+  - name: banned_terms
+    type: banned_terms
+    tier: 1
+    target: copy
+    params:
+      terms: [cheap, guarantee, "#1", "best ever"]
+  - name: max_sentences
+    type: max_sentences
+    tier: 1
+    target: copy
+    params:
+      max: 4
+  - name: grounding
+    type: grounding
+    tier: 1
+    target: image
+    params:
+      object: water bottle
+      min_area_frac: 0.04
+
+  # Tier 2 — semantic multimodal court (only runs if Tier 1 passes)
+  - name: claim_support
+    type: claim_support
+    tier: 2
+    target: copy
+  - name: brand_tone
+    type: brand_tone
+    tier: 2
+    target: copy
+    params:
+      rules: "Tone: confident, premium, concise. No unverified superlatives."
+  - name: consistency
+    type: consistency
+    tier: 2
+    target: image
+
+limits:
+  max_iters: 6
+  budget_usd: 5.0

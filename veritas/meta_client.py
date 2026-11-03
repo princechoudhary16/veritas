@@ -12,6 +12,7 @@ output items, SAM's special-token output) and no hidden retries.
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -32,10 +33,15 @@ class Usage:
     calls: int = 0
     by_model: dict[str, float] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        # Guards concurrent updates when critics run in parallel threads.
+        self._lock = threading.Lock()
+
     def add(self, model: str, cost: float) -> None:
-        self.spend_usd += cost
-        self.calls += 1
-        self.by_model[model] = self.by_model.get(model, 0.0) + cost
+        with self._lock:
+            self.spend_usd += cost
+            self.calls += 1
+            self.by_model[model] = self.by_model.get(model, 0.0) + cost
 
 
 class MetaClient:

@@ -1,0 +1,89 @@
+{
+  "veritas_version": "0.2.0",
+  "policy": "commercial_brand_guard",
+  "theme": "Build for Your World",
+  "generated_at": "2026-11-03T06:20:55Z",
+  "passed": true,
+  "stopped_reason": "passed",
+  "iterations": 5,
+  "assets": {
+    "copy_sha256": "bc30202231ba4c9999c5853a2b43aec8ab3f6d926b56e0e07aa33eea5e18a8a2",
+    "image_sha256": "83ce85f0afdab832fb14437466fad0119da9f12cdad94a52fa3428729b17aaea",
+    "image_path": "out/commercial_brand_guard_iter_5.webp"
+  },
+  "verification": {
+    "checks": [
+      {
+        "name": "banned_terms",
+        "type": "banned_terms",
+        "tier": 1,
+        "target": "copy"
+      },
+      {
+        "name": "max_sentences",
+        "type": "max_sentences",
+        "tier": 1,
+        "target": "copy"
+      },
+      {
+        "name": "grounding",
+        "type": "grounding",
+        "tier": 1,
+        "target": "image"
+      },
+      {
+        "name": "claim_support",
+        "type": "claim_support",
+        "tier": 2,
+        "target": "copy"
+      },
+      {
+        "name": "brand_tone",
+        "type": "brand_tone",
+        "tier": 2,
+        "target": "copy"
+      },
+      {
+        "name": "consistency",
+        "type": "consistency",
+        "tier": 2,
+        "target": "image"
+      }
+    ],
+    "final_scores": {
+      "banned_terms": {
+        "pass": true,
+        "score": 1.0
+      },
+      "max_sentences": {
+        "pass": true,
+        "score": 1.0
+      },
+      "grounding": {
+        "pass": true,
+        "score": 1.0
+      },
+      "claim_support": {
+        "pass": true,
+        "score": 1.0
+      },
+      "brand_tone": {
+        "pass": true,
+        "score": 1.0
+      },
+      "consistency": {
+        "pass": true,
+        "score": 0.98
+      }
+    }
+  },
+  "economics": {
+    "credits_spent_usd": 0.102184,
+    "credits_saved_by_short_circuit_usd": 0.06,
+    "spend_by_model": {
+      "muse-spark-1.3": 0.039684,
+      "muse-image-1.0": 0.05,
+      "sam-3.1": 0.0125
+    }
+  }
+}
