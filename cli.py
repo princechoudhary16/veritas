@@ -7,6 +7,8 @@
 import argparse
 import asyncio
 import json
+import os
+import time
 
 from veritas.config import load_api_key
 from veritas.engine import run_engine
@@ -52,6 +54,14 @@ def main() -> None:
     with open(args.receipt, "w") as f:
         json.dump(result.receipt, f, indent=2)
     print("Receipt written to:", args.receipt)
+
+    # Persist the full run so the UI can replay it with no API spend.
+    os.makedirs("runs", exist_ok=True)
+    run_path = os.path.join("runs", f"engine_{policy.name}_{int(time.time())}.json")
+    with open(run_path, "w") as f:
+        json.dump({"policy": policy.name, "passed": result.passed,
+                   "stopped_reason": result.stopped_reason, "spend_usd": result.spend_usd,
+                   "iterations": result.iterations, "receipt": result.receipt}, f)
     print("Credits saved by short-circuiting: "
           f"${result.receipt['economics']['credits_saved_by_short_circuit_usd']:.4f}")
 
