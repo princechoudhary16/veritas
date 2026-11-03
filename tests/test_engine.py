@@ -28,6 +28,17 @@ class _FakeProvider:
         self.usage = _FakeUsage()
 
 
+def _unique_image_gen():
+    """A generate_scene_image stub that returns distinct bytes each call."""
+    counter = {"i": 0}
+
+    def gen(p, s, f=None):
+        counter["i"] += 1
+        return base64.b64encode(f"img{counter['i']}".encode()).decode()
+
+    return gen
+
+
 def _policy():
     return Policy(
         name="test_policy",
@@ -54,8 +65,7 @@ def test_short_circuit_fix_and_receipt(tmp_path, monkeypatch):
 
     monkeypatch.setattr(engine_mod, "run_check", fake_run_check)
     monkeypatch.setattr(engine_mod, "generate_copy", lambda p, b, s, f=None: "Headline\nBody one. Body two.")
-    monkeypatch.setattr(engine_mod, "generate_scene_image",
-                        lambda p, s, f=None: base64.b64encode(b"webp-bytes").decode())
+    monkeypatch.setattr(engine_mod, "generate_scene_image", _unique_image_gen())
 
     run_input = {"brief": "b", "source_truth": "s",
                  "target_object": "water bottle", "scene_prompt": "sc"}
@@ -89,3 +99,40 @@ def test_budget_guard_stops(tmp_path, monkeypatch):
                                     provider, out_dir=str(tmp_path)))
     assert result.passed is False
     assert result.stopped_reason == "budget_exceeded"
+
+
+def test_cache_reuses_stable_copy(tmp_path, monkeypatch):
+    # Both checks are Tier 1; copy stays constant while the image is regenerated,
+    # so the copy check must be served from cache on iteration 2.
+    policy = Policy(
+        name="cache_policy",
+        checks=[
+            Check(name="claim_support", type="claim_support", tier=1, target="copy"),
+            Check(name="grounding", type="grounding", tier=1, target="image"),
+        ],
+        max_iters=4, budget_usd=5.0, produces=["copy", "image"],
+    )
+    state = {"grounding_calls": 0, "claim_calls": 0}
+
+    async def fake_run_check(check, provider, artifacts, run_input):
+        if check.name == "grounding":
+            state["grounding_calls"] += 1
+            ok = state["grounding_calls"] >= 2
+            return Verdict("grounding", ok, 1.0 if ok else 0.0, "img", "" if ok else "fix image")
+        state["claim_calls"] += 1
+        return Verdict("claim_support", True, 1.0, "ok", "")
+
+    monkeypatch.setattr(engine_mod, "run_check", fake_run_check)
+    monkeypatch.setattr(engine_mod, "generate_copy", lambda p, b, s, f=None: "STABLE COPY")
+    monkeypatch.setattr(engine_mod, "generate_scene_image", _unique_image_gen())
+
+    result = asyncio.run(run_engine(policy, {"brief": "b", "source_truth": "s",
+                                             "target_object": "o", "scene_prompt": "sc"},
+                                    _FakeProvider(), out_dir=str(tmp_path)))
+
+    assert result.passed is True
+    assert len(result.iterations) == 2
+    # claim_support ran once (iter 1) and was cached on iter 2 (copy unchanged).
+    assert state["claim_calls"] == 1
+    assert result.iterations[1]["cached"] == ["claim_support"]
+    assert result.receipt["economics"]["credits_saved_by_cache_usd"] > 0
