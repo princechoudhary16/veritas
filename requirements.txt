@@ -2,6 +2,9 @@ requests>=2.31
 flask>=3.0
 pyyaml>=6.0
 z3-solver>=4.12
+c2pa-python>=0.38
+cryptography>=42.0
 
 # dev
 pytest>=8.0
+pillow>=10.0
