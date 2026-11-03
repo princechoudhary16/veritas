@@ -1,0 +1,16 @@
+# Secrets — never commit the real key
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Run artifacts
+runs/
+out/
+*.png
+*.webp
+*.mp4
