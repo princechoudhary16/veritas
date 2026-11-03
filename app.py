@@ -69,6 +69,15 @@ def capabilities():
                                 "partner_model": PARTNER_MODEL}), mimetype="application/json")
 
 
+@app.route("/api/export-dpo-dataset")
+def export_dpo():
+    from veritas.dpo import build_dpo_pairs
+    pairs = build_dpo_pairs(os.path.join(HERE, "runs"), os.path.join(HERE, "policies"))
+    body = "\n".join(json.dumps(p) for p in pairs)
+    return Response(body, mimetype="application/x-ndjson",
+                    headers={"Content-Disposition": "attachment; filename=veritas_dpo.jsonl"})
+
+
 @app.route("/")
 def index():
     return Response(INDEX_HTML, mimetype="text/html")

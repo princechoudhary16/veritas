@@ -15,4 +15,5 @@ out/
 *.webp
 *.mp4
 veritas.lock.json
+veritas_dpo.jsonl
 .pytest_cache/
