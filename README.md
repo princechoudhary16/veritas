@@ -1,123 +1,130 @@
 # Veritas
 
-**An agent that treats every generative output as a claim to be disproven** — it
-generates with Meta's models, then adversarially cross-checks each artifact
-against its source of truth in a closed loop until it provably passes, refusing
-to ship anything it cannot verify.
+**CI/CD for multimodal AI.** Veritas is a declarative verification engine: it
+generates with Meta's models, then cross-checks every artifact against a
+*policy* — a hot-swappable contract of tiered checks — in a closed loop until it
+provably passes, refusing to ship anything it cannot verify. Each run ends in a
+cryptographic receipt.
 
 Built for the **Meta Global AI Developer Hackathon** on the Meta Model API
 (Muse Spark, Muse Image, SAM 3.1).
 
-![Veritas live UI — a verified campaign shipped in 4 iterations](docs/ui-overview.jpg)
+![Veritas verifying a robotics synthetic-data scene with SAM 3.1 box overlays](docs/ui-robotics.jpg)
 
-## Why
+## The idea
 
-Generative models are powerful but confidently wrong. Veritas is a framework
-where **nothing ships unverified**: the model that *creates* an artifact is
-never the only model that *judges* it, every check returns a machine-checkable
-verdict, and every iteration is logged to an append-only audit trail.
+Generative models are powerful but confidently wrong. Veritas treats every
+output as a *claim to be disproven*. The same engine runs any **Policy Pack**, so
+a domain is just a YAML file:
 
-Watch it catch its own mistakes — here SAM 3.1 finds no product in the first
-render, and the cross-modal consistency critic rejects a bottle whose markings
-imply the wrong capacity:
+- **Commercial Brand Guard** (*Build for Your World*) — ad copy + imagery checked
+  against product facts and brand rules.
+- **Synthetic Data Gate** (*Push the Frontier*) — admits a generated image into a
+  robot-perception training set only if objects are present, correctly counted,
+  prominent (an occlusion proxy), and physically plausible.
 
-![Veritas catching a missing product and an inconsistent image](docs/ui-catch.jpg)
+Nothing changes between them but the policy.
 
-## How it works
+## Architecture
 
 ```
-brief + source of truth
+policy pack (YAML)  +  source of truth
         │
         ▼
-   ┌─ Generator ─┐        Muse Spark (copy) · Muse Image (image)
-   │             │
-   ▼             │
- Verifier court ─┘        four independent critics, each a structured verdict
-   │                      {pass, score, reason, fix_hint}
-   ▼
- all pass? ── yes ──▶ ship (with audit trail)
-   │
-   no ──▶ Fixer repairs only the faulty artifact ──▶ loop back
+   generate (Muse Spark / Muse Image)
+        │
+        ▼
+  Tier 1  ── cheap deterministic + SAM 3.1 spatial gate ──┐  fail → short-circuit
+        │ pass                                            │  (skip Tier 2, save credits)
+        ▼                                                 │
+  Tier 2  ── semantic court (fact / brand / vision) ──────┘
+        │
+   all pass? ── yes ─▶ ship + cryptographic receipt (veritas.lock.json)
+        │
+        no ─▶ route each failure to the artifact that owns it ─▶ fix only that ─▶ loop
 ```
 
-### The verifier court
+- **Async tiered DAG** (`veritas/engine.py`): a cheap Tier-1 failure short-circuits
+  the expensive semantic court — on a real run this saved **$0.03–$0.06 per run**.
+- **Separation of powers**: generators and critics are independent model calls;
+  deterministic checks gate the LLM ones (mitigates LLM-as-a-judge bias).
+- **Fix routing**: a failing check is routed to the copy *or* the image, so the
+  Fixer regenerates only what broke.
+- **Fail closed**: hard iteration + spend budgets; it refuses rather than ships.
 
-| Critic | Judges | Powered by |
-|--------|--------|-----------|
-| `claim_support` | every factual claim in the copy is backed by the product facts | Muse Spark |
-| `brand` | tone, length, banned words / unverified superlatives | Muse Spark |
-| `grounding` | the product is actually present and prominent in the image | SAM 3.1 |
-| `consistency` | the image does not contradict the copy (product, colour, scene) | Muse Spark vision |
+### Check types
 
-A failing check is routed to the artifact that owns it, so the Fixer
-regenerates **only** the copy or **only** the image — never blindly both.
+| Type | Tier | Evidence | Model |
+|------|------|----------|-------|
+| `banned_terms`, `max_sentences` | 1 | deterministic (regex) | — |
+| `grounding` | 1 | object present & prominent | SAM 3.1 |
+| `object_count` | 1 | instance count in range | SAM 3.1 |
+| `claim_support` | 2 | every claim backed by facts | Muse Spark |
+| `brand_tone` | 2 | tone / banned-claim compliance | Muse Spark |
+| `consistency` | 2 | image ↔ copy agreement | Muse Spark vision |
+| `scene_plausibility` | 2 | physically plausible scene | Muse Spark vision |
 
-### Design principles
+Grounding failures caught in practice: a missing product, a bottle marked
+"1000ml" against 750ml copy, a plastic bottle against stainless-steel copy —
+all auto-repaired. SAM 3.1 boxes are drawn over the image in the UI, red when
+rejected and green when verified:
 
-1. **Nothing ships unverified** — every artifact has a machine-checkable pass/fail.
-2. **Separation of powers** — generators and critics are independent model calls.
-3. **Structured verdicts, not prose** — critics emit strict JSON (`Verdict`).
-4. **Everything is logged** — the audit ledger is the guarantee and the proof.
-5. **Fail closed, bounded** — hard iteration + spend limits; refuses rather than shipping garbage.
-
-## Repo layout
-
-| File | Role |
-|------|------|
-| `veritas/meta_client.py` | Meta Model API client (Responses + Images) + spend ledger |
-| `veritas/contracts.py`   | The `Verdict` contract + robust JSON parsing |
-| `veritas/sam.py`         | SAM 3.1 segmentation output parser (boxes + prominence) |
-| `veritas/generators.py`  | Copy and image generators |
-| `veritas/critics.py`     | The four independent critics |
-| `veritas/fixer.py`       | Turns failing verdicts into fix instructions |
-| `veritas/orchestrator.py`| The loops (text / image / campaign), budget guard, audit ledger |
-| `app.py`                 | Live web UI streaming the loop over SSE (+ replay mode) |
-| `run_demo*.py`           | CLI demos: text, grounded image, full campaign |
+![Veritas catching a missing product and an inconsistent image](docs/ui-catch.jpg)
 
 ## Quick start
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env            # put your Meta Model API key in .env
+cp .env.example .env            # add your Meta Model API key
 set -a; source .env; set +a
 ```
 
-Command-line demos:
+Run a policy from the command line (writes a receipt):
 
 ```bash
-python run_demo.py            # text claim-support loop
-python run_demo_image.py      # grounded-visual loop (Muse Image + SAM 3.1)
-python run_demo_campaign.py   # full campaign: copy + image, 4 critics
+python cli.py policies/commercial_brand_guard.yaml
+python cli.py policies/synthetic_data_gate.yaml
 ```
 
-Live UI (what the screenshots show):
+Live UI with a policy switcher, SAM box overlays, and a downloadable receipt:
 
 ```bash
-python app.py                 # open http://127.0.0.1:5050
+python app.py                   # http://127.0.0.1:5050
 ```
 
-The UI has a **live** mode (runs a real campaign on the Meta Model API) and a
-**replay** mode (replays the most recent saved run from `runs/` with no API
-spend — handy for demos).
+Tests (offline, no API key needed):
 
-## Meta Model API integration
+```bash
+pytest -q
+```
 
-- Base URL `https://api.meta.ai/v1`, auth `Authorization: Bearer $MODEL_API_KEY`
-- Text / grounding / agentic → `POST /responses`; images → `POST /images/generations`
-- Models: `muse-spark-1.3` (copy, critics, vision), `muse-image-1.0` (image),
-  `sam-3.1` (grounded verification)
-- The client keeps a live USD spend ledger and the orchestrator enforces a hard
-  per-run budget.
+## The receipt (`veritas.lock.json`)
 
-## Status
+Every run emits a tamper-evident manifest — SHA-256 hashes of the shipped
+assets, the policy and checks that certified them, per-critic final scores, and
+the economics (credits spent vs. saved by short-circuiting). See
+[`docs/sample.veritas.lock.json`](docs/sample.veritas.lock.json).
 
-- [x] Meta Model API client with live spend tracking
-- [x] Verdict contract + closed loop + audit ledger
-- [x] Text claim-support verification loop
-- [x] Muse Image generation + SAM 3.1 grounding critic
-- [x] Brand + cross-modal consistency critics (unified campaign loop)
-- [x] Live web UI showing the catch-and-fix (live + replay modes)
-- [ ] 3-minute demo video
+## Repo layout
+
+| Path | Role |
+|------|------|
+| `veritas/policy.py` | policy pack types + YAML loader + validation |
+| `veritas/engine.py` | async tiered DAG, short-circuit, fix routing, budget |
+| `veritas/checks.py` | check registry (deterministic + LLM/SAM), tiered |
+| `veritas/critics.py` | the independent critics |
+| `veritas/receipt.py` | cryptographic audit receipt |
+| `veritas/meta_client.py` | Meta Model API client + thread-safe spend ledger |
+| `policies/*.yaml` | the Policy Packs |
+| `app.py` / `cli.py` | live UI / command line |
+| `tests/` | offline test suite (pytest), run in CI |
+
+## Grounded in the literature
+
+Self-Refine (Madaan et al., 2023), Reflexion (Shinn et al., 2023),
+Chain-of-Verification (Dhuliawala et al., 2023), FActScore (Min et al., 2023),
+Constitutional AI (Bai et al., 2022), LLM-as-a-Judge (Zheng et al., 2023), and
+Segment Anything (Kirillov et al., 2023).
 
 ## License
 
