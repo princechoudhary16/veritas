@@ -26,6 +26,8 @@ def main() -> None:
                     help="route text critics to the Baseten inference partner (hybrid)")
     ap.add_argument("--surgical", action="store_true",
                     help="repair images by editing the flagged image in place (not full regen)")
+    ap.add_argument("--c2pa", action="store_true",
+                    help="embed the receipt into the final image as a C2PA Content Credential")
     args = ap.parse_args()
 
     policy = load_policy(args.policy)
@@ -84,6 +86,13 @@ def main() -> None:
     print(f"Credits saved by cache:            ${econ['credits_saved_by_cache_usd']:.4f}")
     if econ.get("critics_routed_to"):
         print(f"Partner spend ({econ['critics_routed_to']}): ${econ['partner_spend_usd']:.4f}")
+
+    if args.c2pa and result.passed and result.final.get("image"):
+        from veritas.c2pa_export import embed_receipt
+        out_img = os.path.join("out", f"{policy.name}_verified.webp")
+        embed_receipt(result.final["image"], result.receipt, out_img)
+        print(f"C2PA content credential embedded -> {out_img} "
+              "(inspect at contentcredentials.org/verify)")
 
 
 if __name__ == "__main__":
